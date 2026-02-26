@@ -183,11 +183,23 @@ export function validateConfig(): void {
   }
 
   if (config.host === '0.0.0.0' && !config.auth) {
-    console.warn(
-      '\n  \x1b[33m⚠ Server binds to 0.0.0.0 with authentication DISABLED.\x1b[0m\n' +
-      '  All API endpoints are accessible from the network without a password.\n' +
-      '  Run \x1b[36mnpm run setup\x1b[0m to enable authentication.\n',
-    );
+    if (process.env.NERVE_ALLOW_INSECURE === 'true') {
+      console.warn(
+        '\n  \x1b[33m⚠ INSECURE MODE: Server binds to 0.0.0.0 with authentication DISABLED.\x1b[0m\n' +
+        '  All API endpoints are accessible from the network without a password.\n' +
+        '  This is dangerous. Run \x1b[36mnpm run setup\x1b[0m to enable authentication.\n',
+      );
+    } else {
+      console.error(
+        '\n  \x1b[31m✗ Refusing to start: HOST=0.0.0.0 with authentication disabled.\x1b[0m\n' +
+        '  This would expose all API endpoints (files, memory, API keys) to the network.\n\n' +
+        '  To fix, either:\n' +
+        '    1. Enable auth:  \x1b[36mnpm run setup\x1b[0m\n' +
+        '    2. Bind locally: \x1b[36mHOST=127.0.0.1\x1b[0m in .env\n' +
+        '    3. Override:     \x1b[36mNERVE_ALLOW_INSECURE=true\x1b[0m in .env (NOT recommended)\n',
+      );
+      process.exit(1);
+    }
   }
 
   // Informational warnings
@@ -201,11 +213,8 @@ export function validateConfig(): void {
     console.warn('[config] ⚠ LANGUAGE is deprecated — use NERVE_LANGUAGE instead');
   }
   if (config.host === '0.0.0.0' && config.auth) {
-    // Only warn about network binding when auth IS enabled (the loud warning above covers the no-auth case)
     console.warn('[config] ⚠ Server binds to 0.0.0.0 — API is accessible from the network (auth enabled).');
-  } else if (config.host === '0.0.0.0' && !config.auth) {
-    // Already warned above with the loud message — skip the generic one
-  } else if (config.host !== '127.0.0.1' && config.host !== 'localhost' && config.host !== '::1') {
+  } else if (config.host !== '0.0.0.0' && config.host !== '127.0.0.1' && config.host !== 'localhost' && config.host !== '::1') {
     console.warn(
       '[config] ⚠ Server binds to ' + config.host + ' — API may be accessible from the network.\n' +
       '         Set HOST=127.0.0.1 for local-only access.',

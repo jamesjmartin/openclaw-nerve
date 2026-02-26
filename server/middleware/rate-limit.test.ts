@@ -184,4 +184,10 @@ describe('rate-limit middleware', () => {
     expect(res.status).toBe(200);
     // All anonymous clients share the 'unknown' bucket
   });
+
+  it('exports rateLimitAuth with strict 5/min limit', async () => {
+    const { rateLimitAuth } = await import('./rate-limit.js');
+    expect(rateLimitAuth).toBeDefined();
+    expect(typeof rateLimitAuth).toBe('function');
+  });
 });

@@ -11,7 +11,7 @@ import { Hono } from 'hono';
 import { setCookie, deleteCookie, getCookie } from 'hono/cookie';
 import { config, SESSION_COOKIE_NAME } from '../lib/config.js';
 import { createSession, verifySession, verifyPassword } from '../lib/session.js';
-import { rateLimitGeneral } from '../middleware/rate-limit.js';
+import { rateLimitAuth } from '../middleware/rate-limit.js';
 
 const app = new Hono();
 
@@ -20,7 +20,7 @@ const app = new Hono();
  * Accepts { password: string }
  * Sets HttpOnly session cookie on success.
  */
-app.post('/api/auth/login', rateLimitGeneral, async (c) => {
+app.post('/api/auth/login', rateLimitAuth, async (c) => {
   // If auth is disabled, always succeed
   if (!config.auth) {
     return c.json({ ok: true, message: 'Auth disabled' });
@@ -39,11 +39,6 @@ app.post('/api/auth/login', rateLimitGeneral, async (c) => {
     // Check against stored password hash
     if (config.passwordHash) {
       valid = await verifyPassword(password, config.passwordHash);
-    }
-
-    // Fallback: accept gateway token as password
-    if (!valid && config.gatewayToken && password === config.gatewayToken) {
-      valid = true;
     }
 
     if (!valid) {

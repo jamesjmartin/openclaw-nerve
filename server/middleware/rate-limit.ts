@@ -158,3 +158,6 @@ export const rateLimitTranscribe = rateLimit({ maxRequests: 30, windowMs: 60 * 1
 
 /** Preset: 60 requests per minute (for general API calls like memories) */
 export const rateLimitGeneral = rateLimit({ maxRequests: 60, windowMs: 60 * 1000 });
+
+/** Preset: 5 requests per minute (for authentication — brute-force protection) */
+export const rateLimitAuth = rateLimit({ maxRequests: 5, windowMs: 60 * 1000 });

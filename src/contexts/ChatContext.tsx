@@ -71,8 +71,8 @@ function buildVoiceFallbackText(raw: string): string | null {
   text = text.replace(/^---+$/gm, '');
   // Collapse whitespace
   text = text.replace(/\n{2,}/g, '. ').replace(/\n/g, ' ').replace(/\s{2,}/g, ' ').trim();
-  // Must have at least 3 word-like characters to be speakable
-  if (!/[a-zA-Z]{3,}/.test(text)) return null;
+  // Must have at least 3 letter characters (unicode-aware for non-Latin scripts)
+  if (!/\p{L}{3,}/u.test(text)) return null;
   // Cap length
   if (text.length > FALLBACK_MAX_CHARS) {
     text = text.slice(0, FALLBACK_MAX_CHARS).replace(/\s\S*$/, '') + '…';

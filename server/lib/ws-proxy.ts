@@ -126,6 +126,13 @@ export function setupWebSocketProxy(server: HttpServer | HttpsServer): void {
       return;
     }
 
+    const targetPort = Number(targetUrl.port) || (targetUrl.protocol === 'wss:' ? 443 : 80);
+    if (targetPort < 1 || targetPort > 65535) {
+      console.warn(`[ws-proxy] Rejected: invalid port ${targetPort}`);
+      clientWs.close(1008, 'Invalid target port');
+      return;
+    }
+
     // Forward origin header for gateway auth
     const isEncrypted = !!(req.socket as unknown as { encrypted?: boolean }).encrypted;
     const scheme = isEncrypted ? 'https' : 'http';

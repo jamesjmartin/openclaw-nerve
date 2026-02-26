@@ -216,4 +216,46 @@ describe('config module', () => {
       expect(path.isAbsolute(config.sessionsDir)).toBe(true);
     });
   });
+
+  describe('network-exposed auth guard', () => {
+    it('exits when HOST=0.0.0.0 and auth is disabled', async () => {
+      vi.resetModules();
+      process.env.HOST = '0.0.0.0';
+      process.env.NERVE_AUTH = 'false';
+      delete process.env.NERVE_ALLOW_INSECURE;
+
+      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const { validateConfig } = await import('./config.js');
+      validateConfig();
+
+      expect(exitSpy).toHaveBeenCalledWith(1);
+      exitSpy.mockRestore();
+      errorSpy.mockRestore();
+      warnSpy.mockRestore();
+    });
+
+    it('warns but does not exit when NERVE_ALLOW_INSECURE=true', async () => {
+      vi.resetModules();
+      process.env.HOST = '0.0.0.0';
+      process.env.NERVE_AUTH = 'false';
+      process.env.NERVE_ALLOW_INSECURE = 'true';
+
+      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const { validateConfig } = await import('./config.js');
+      validateConfig();
+
+      expect(exitSpy).not.toHaveBeenCalled();
+      const allWarns = warnSpy.mock.calls.map(c => c.join(' ')).join('\n');
+      expect(allWarns).toContain('INSECURE MODE');
+      exitSpy.mockRestore();
+      warnSpy.mockRestore();
+      errorSpy.mockRestore();
+    });
+  });
 });
