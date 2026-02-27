@@ -102,15 +102,24 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('oc-tts-model', model);
   }, []);
 
-  // Sync STT provider to server on mount (in case server restarted)
+  // Sync STT provider to server on mount (in case server restarted).
+  // GET first to avoid overwriting server state with a stale local value.
   useEffect(() => {
-    if (sttProvider) {
-      fetch('/api/transcribe/config', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider: sttProvider }),
-      }).catch(() => {});
-    }
+    if (!sttProvider) return;
+    fetch('/api/transcribe/config')
+      .then(resp => resp.ok ? resp.json() : null)
+      .then(data => {
+        const serverProvider = data?.provider as STTProvider | undefined;
+        // Only PUT if local value differs from what the server already has
+        if (serverProvider !== sttProvider) {
+          return fetch('/api/transcribe/config', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ provider: sttProvider }),
+          });
+        }
+      })
+      .catch(() => {});
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const changeSttProvider = useCallback((provider: STTProvider) => {

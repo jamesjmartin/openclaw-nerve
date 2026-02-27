@@ -1,29 +1,14 @@
 import { useRef, useCallback, useEffect } from 'react';
+import { ensureAudioContext } from '@/features/voice/audio-feedback';
 
 // ─── Audio autoplay unlock ─────────────────────────────────────────────────────
 // Browsers block audio.play() until the user has interacted with the page.
-// We "unlock" audio by playing a tiny silent buffer on the first user gesture,
+// We "unlock" audio by resuming the shared AudioContext on the first user gesture,
 // which whitelists the origin for subsequent programmatic playback.
-let audioUnlocked = false;
-function unlockAudio() {
-  if (audioUnlocked) return;
-  audioUnlocked = true;
-  try {
-    const ctx = new AudioContext();
-    const buf = ctx.createBuffer(1, 1, 22050);
-    const src = ctx.createBufferSource();
-    src.buffer = buf;
-    src.connect(ctx.destination);
-    src.start(0);
-    // Clean up after unlock
-    setTimeout(() => { ctx.close().catch(() => {}); }, 100);
-  } catch { /* ignore */ }
-}
-
 if (typeof document !== 'undefined') {
   const events = ['click', 'touchstart', 'keydown'] as const;
   const handler = () => {
-    unlockAudio();
+    ensureAudioContext();
     events.forEach(e => document.removeEventListener(e, handler, true));
   };
   events.forEach(e => document.addEventListener(e, handler, { capture: true, once: false }));

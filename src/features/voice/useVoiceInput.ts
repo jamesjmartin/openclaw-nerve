@@ -140,6 +140,8 @@ export function useVoiceInput(
 ) {
   const [state, setState] = useState<VoiceState>('idle');
   const stateRef = useRef<VoiceState>('idle');
+  const [error, setError] = useState<string | null>(null);
+  const clearError = useCallback(() => setError(null), []);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
@@ -353,11 +355,16 @@ export function useVoiceInput(
       mediaRecorderRef.current = mr;
       mr.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
       mr.start();
+      setError(null);
       setVoiceState('recording');
       // Now start listening for stop phrases
       ensureRecognitionRef.current('stop');
     } catch (err) {
       console.error('Mic access denied:', err);
+      const msg = err instanceof DOMException && err.name === 'NotAllowedError'
+        ? 'Microphone permission denied'
+        : 'Failed to access microphone';
+      setError(msg);
       if (wakeWordEnabledRef.current) {
         setVoiceState('listening');
         ensureRecognitionRef.current('wake');
@@ -405,8 +412,10 @@ export function useVoiceInput(
         // Use dynamic stop phrases regex (includes agent's wake phrase)
         const cleaned = (text || '').trim().replace(stopPhrasesRegexRef.current, '').trim();
         if (cleaned) onTranscriptionRef.current(cleaned);
+        setError(null);
       } catch (err) {
         console.error('Transcription failed:', err);
+        setError(`Transcription failed: ${err instanceof Error ? err.message : String(err)}`);
       }
       // Resume wake word listener
       if (wakeWordEnabledRef.current) {
@@ -426,6 +435,7 @@ export function useVoiceInput(
       wakeWordEnabledRef.current = false;
       setWakeWordEnabled(false);
       setVoiceState('idle');
+      setError('Speech recognition is not supported in this browser');
       return;
     }
     // Initialize AudioContext on user interaction
@@ -555,5 +565,7 @@ export function useVoiceInput(
     toggleWakeWord,
     startWakeWordListener,
     stopWakeWordListener,
+    error,
+    clearError,
   };
 }
