@@ -4,7 +4,7 @@
  * Manages stream recovery on disconnect, gap detection recovery,
  * generation-based stale-guard, and reconnect state tracking.
  */
-import { useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useEffect, useMemo } from 'react';
 import { loadChatHistory, mergeRecoveredTail } from '@/features/chat/operations';
 import type { RecoveryReason } from '@/features/chat/operations';
 import type { RunState } from '@/features/chat/operations';
@@ -178,7 +178,7 @@ export function useChatRecovery({
     return () => clearRecoveryTimer();
   }, [clearRecoveryTimer]);
 
-  return {
+  return useMemo(() => ({
     triggerRecovery,
     clearRecoveryTimer,
     incrementGeneration,
@@ -189,5 +189,16 @@ export function useChatRecovery({
     isRecoveryInFlight,
     isRecoveryPending,
     resetRecoveryState,
-  };
+  }), [
+    triggerRecovery,
+    clearRecoveryTimer,
+    incrementGeneration,
+    getGeneration,
+    captureDisconnectState,
+    wasGeneratingOnDisconnect,
+    clearDisconnectState,
+    isRecoveryInFlight,
+    isRecoveryPending,
+    resetRecoveryState,
+  ]);
 }

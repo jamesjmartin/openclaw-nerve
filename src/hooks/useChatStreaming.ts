@@ -173,7 +173,7 @@ export function useChatStreaming() {
     return () => clearScheduledStreamFlush();
   }, [clearScheduledStreamFlush]);
 
-  return {
+  return useMemo(() => ({
     // State
     stream,
     setStream,
@@ -202,5 +202,25 @@ export function useChatStreaming() {
 
     // Reset
     resetStreamState,
-  };
+  }), [
+    stream,
+    processingStage,
+    lastEventTimestamp,
+    activityLog,
+    currentToolDescription,
+    setStream,
+    setProcessingStage,
+    setLastEventTimestamp,
+    setActivityLog,
+    scheduleStreamingUpdate,
+    clearScheduledStreamFlush,
+    clearStreamBuffer,
+    addActivityEntry,
+    completeActivityEntry,
+    startThinking,
+    captureThinkingDuration,
+    getThinkingDuration,
+    resetThinking,
+    resetStreamState,
+  ]);
 }

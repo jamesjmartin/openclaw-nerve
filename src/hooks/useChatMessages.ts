@@ -4,7 +4,7 @@
  * Manages the full message buffer, visible window for infinite scroll,
  * history loading, and message merge/dedup utilities.
  */
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useMemo } from 'react';
 import { loadChatHistory } from '@/features/chat/operations';
 import { generateMsgId } from '@/features/chat/types';
 import type { ChatMsg } from '@/features/chat/types';
@@ -176,7 +176,7 @@ export function useChatMessages({ rpc, currentSessionRef }: UseChatMessagesDeps)
     allMessagesRef.current = [];
   }, []);
 
-  return {
+  return useMemo(() => ({
     messages,
     setMessages,
     hasMore,
@@ -186,5 +186,15 @@ export function useChatMessages({ rpc, currentSessionRef }: UseChatMessagesDeps)
     getAllMessages,
     setAllMessages,
     resetMessageState,
-  };
+  }), [
+    messages,
+    hasMore,
+    setMessages,
+    applyMessageWindow,
+    loadHistory,
+    loadMore,
+    getAllMessages,
+    setAllMessages,
+    resetMessageState,
+  ]);
 }

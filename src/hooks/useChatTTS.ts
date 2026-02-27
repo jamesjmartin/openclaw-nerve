@@ -4,7 +4,7 @@
  * Manages voice fallback text generation, TTS marker extraction,
  * auto-speak logic, and played-sound deduplication.
  */
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useMemo } from 'react';
 import { playPing } from '@/features/voice/audio-feedback';
 import type { FinalMessageData } from '@/features/chat/operations';
 
@@ -83,10 +83,15 @@ export function useChatTTS({ soundEnabled, speak }: UseChatTTSDeps) {
     if (soundEnabled.current) playPing();
   }, [soundEnabled]);
 
-  return {
+  return useMemo(() => ({
     trackVoiceMessage,
     resetPlayedSounds,
     handleFinalTTS,
     playCompletionPing,
-  };
+  }), [
+    trackVoiceMessage,
+    resetPlayedSounds,
+    handleFinalTTS,
+    playCompletionPing,
+  ]);
 }
