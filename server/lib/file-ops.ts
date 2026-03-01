@@ -2,7 +2,8 @@
  * File operation pipeline for the file explorer.
  *
  * Single source of truth for rename/move/trash/restore semantics.
- * All operations are constrained to workspace-relative paths.
+ * Supports both workspace-relative paths and filesystem scope (absolute paths).
+ * Rename, move, and delete operations work in both scopes; trash/restore are workspace-only.
  */
 
 import fs from 'node:fs/promises';
@@ -12,7 +13,9 @@ import crypto from 'node:crypto';
 import {
   getWorkspaceRoot,
   isExcluded,
+  resolveFsPath,
   resolveWorkspacePath,
+  toPosixPath,
 } from './file-utils.js';
 import { withMutex } from './mutex.js';
 
@@ -138,6 +141,22 @@ async function resolveExistingPathOrThrow(relPath: string): Promise<string> {
 
 async function resolvePathAllowNewOrThrow(relPath: string): Promise<string> {
   const resolved = await resolveWorkspacePath(relPath, { allowNonExistent: true });
+  if (!resolved) {
+    throw new FileOpError(403, 'invalid_path', 'Invalid or excluded path');
+  }
+  return resolved;
+}
+
+async function resolveExistingFsPathOrThrow(absPath: string): Promise<string> {
+  const resolved = await resolveFsPath(absPath);
+  if (!resolved) {
+    throw new FileOpError(403, 'invalid_path', 'Invalid or excluded path');
+  }
+  return resolved;
+}
+
+async function resolveFsPathAllowNewOrThrow(absPath: string): Promise<string> {
+  const resolved = await resolveFsPath(absPath, { allowNonExistent: true });
   if (!resolved) {
     throw new FileOpError(403, 'invalid_path', 'Invalid or excluded path');
   }
@@ -314,74 +333,136 @@ async function updateTrashIndexAfterMove(fromRel: string, toRel: string): Promis
   }
 }
 
-export async function renameEntry(params: { path: string; newName: string }): Promise<FileOpResult> {
+export async function renameEntry(params: { path: string; newName: string; scope?: 'workspace' | 'fs' }): Promise<FileOpResult> {
   return withFileOpsLock(async () => {
     assertValidNewName(params.newName);
+    const scope = params.scope || 'workspace';
 
-    const sourceAbs = await resolveExistingPathOrThrow(params.path);
-    const sourceRel = toWorkspaceRelative(sourceAbs);
-    assertNotProtected(sourceRel);
+    let sourceAbs: string;
+    let sourceRel: string;
+    let targetAbs: string;
+    let targetRel: string;
 
-    await statOrThrow(sourceAbs);
+    if (scope === 'fs') {
+      // Filesystem scope: absolute paths
+      sourceAbs = await resolveExistingFsPathOrThrow(params.path);
+      await statOrThrow(sourceAbs);
 
-    const targetAbs = await resolvePathAllowNewOrThrow(
-      toPosix(path.join(path.dirname(sourceRel), params.newName.trim())),
-    );
-    const targetRel = toWorkspaceRelative(targetAbs);
-    assertNotProtectedTarget(targetRel);
+      targetAbs = await resolveFsPathAllowNewOrThrow(
+        path.join(path.dirname(sourceAbs), params.newName.trim()),
+      );
 
-    if (sourceAbs === targetAbs) {
+      if (sourceAbs === targetAbs) {
+        return { from: toPosixPath(sourceAbs), to: toPosixPath(targetAbs) };
+      }
+
+      await assertTargetNotExists(targetAbs);
+      await fs.rename(sourceAbs, targetAbs);
+
+      return { from: toPosixPath(sourceAbs), to: toPosixPath(targetAbs) };
+    } else {
+      // Workspace scope: existing behavior
+      sourceAbs = await resolveExistingPathOrThrow(params.path);
+      sourceRel = toWorkspaceRelative(sourceAbs);
+      assertNotProtected(sourceRel);
+
+      await statOrThrow(sourceAbs);
+
+      targetAbs = await resolvePathAllowNewOrThrow(
+        toPosix(path.join(path.dirname(sourceRel), params.newName.trim())),
+      );
+      targetRel = toWorkspaceRelative(targetAbs);
+      assertNotProtectedTarget(targetRel);
+
+      if (sourceAbs === targetAbs) {
+        return { from: sourceRel, to: targetRel };
+      }
+
+      await assertTargetNotExists(targetAbs);
+      await fs.rename(sourceAbs, targetAbs);
+      await updateTrashIndexAfterMove(sourceRel, targetRel);
+
       return { from: sourceRel, to: targetRel };
     }
-
-    await assertTargetNotExists(targetAbs);
-    await fs.rename(sourceAbs, targetAbs);
-    await updateTrashIndexAfterMove(sourceRel, targetRel);
-
-    return { from: sourceRel, to: targetRel };
   });
 }
 
-export async function moveEntry(params: { sourcePath: string; targetDirPath: string }): Promise<FileOpResult> {
+export async function moveEntry(params: { sourcePath: string; targetDirPath: string; scope?: 'workspace' | 'fs' }): Promise<FileOpResult> {
   return withFileOpsLock(async () => {
-    const sourceAbs = await resolveExistingPathOrThrow(params.sourcePath);
-    const sourceRel = toWorkspaceRelative(sourceAbs);
-    assertNotProtected(sourceRel);
+    const scope = params.scope || 'workspace';
 
-    const sourceStat = await statOrThrow(sourceAbs);
-
+    let sourceAbs: string;
+    let sourceRel: string;
     let targetDirAbs: string;
-    if (!params.targetDirPath) {
-      targetDirAbs = workspaceRoot();
+    let targetAbs: string;
+    let targetRel: string;
+
+    if (scope === 'fs') {
+      // Filesystem scope: absolute paths
+      sourceAbs = await resolveExistingFsPathOrThrow(params.sourcePath);
+      const sourceStat = await statOrThrow(sourceAbs);
+
+      if (!params.targetDirPath) {
+        throw new FileOpError(400, 'target_required', 'Target directory is required for filesystem scope');
+      }
+
+      targetDirAbs = await resolveExistingFsPathOrThrow(params.targetDirPath);
+      const targetDirStat = await statOrThrow(targetDirAbs);
+      if (!targetDirStat.isDirectory()) {
+        throw new FileOpError(400, 'target_not_directory', 'Target must be a directory');
+      }
+
+      targetAbs = path.join(targetDirAbs, path.basename(sourceAbs));
+
+      if (sourceAbs === targetAbs) {
+        return { from: toPosixPath(sourceAbs), to: toPosixPath(targetAbs) };
+      }
+
+      assertNotMovingDirIntoSelf(sourceAbs, targetAbs, sourceStat.isDirectory());
+      await assertTargetNotExists(targetAbs);
+      await fs.rename(sourceAbs, targetAbs);
+
+      return { from: toPosixPath(sourceAbs), to: toPosixPath(targetAbs) };
     } else {
-      targetDirAbs = await resolveExistingPathOrThrow(params.targetDirPath);
-    }
+      // Workspace scope: existing behavior
+      sourceAbs = await resolveExistingPathOrThrow(params.sourcePath);
+      sourceRel = toWorkspaceRelative(sourceAbs);
+      assertNotProtected(sourceRel);
 
-    const targetDirStat = await statOrThrow(targetDirAbs);
-    if (!targetDirStat.isDirectory()) {
-      throw new FileOpError(400, 'target_not_directory', 'Target must be a directory');
-    }
+      const sourceStat = await statOrThrow(sourceAbs);
 
-    const targetAbs = path.join(targetDirAbs, path.basename(sourceAbs));
-    const targetRel = toWorkspaceRelative(targetAbs);
-    assertNotProtectedTarget(targetRel);
+      if (!params.targetDirPath) {
+        targetDirAbs = workspaceRoot();
+      } else {
+        targetDirAbs = await resolveExistingPathOrThrow(params.targetDirPath);
+      }
 
-    // Prevent bypassing trash metadata by moving directly into .trash via generic move.
-    if (!isInTrash(sourceRel) && isInTrash(targetRel)) {
-      throw new FileOpError(422, 'use_trash_api', 'Use the trash action for deleting items');
-    }
+      const targetDirStat = await statOrThrow(targetDirAbs);
+      if (!targetDirStat.isDirectory()) {
+        throw new FileOpError(400, 'target_not_directory', 'Target must be a directory');
+      }
 
-    if (sourceAbs === targetAbs) {
+      targetAbs = path.join(targetDirAbs, path.basename(sourceAbs));
+      targetRel = toWorkspaceRelative(targetAbs);
+      assertNotProtectedTarget(targetRel);
+
+      // Prevent bypassing trash metadata by moving directly into .trash via generic move.
+      if (!isInTrash(sourceRel) && isInTrash(targetRel)) {
+        throw new FileOpError(422, 'use_trash_api', 'Use the trash action for deleting items');
+      }
+
+      if (sourceAbs === targetAbs) {
+        return { from: sourceRel, to: targetRel };
+      }
+
+      assertNotMovingDirIntoSelf(sourceAbs, targetAbs, sourceStat.isDirectory());
+      await assertTargetNotExists(targetAbs);
+
+      await fs.rename(sourceAbs, targetAbs);
+      await updateTrashIndexAfterMove(sourceRel, targetRel);
+
       return { from: sourceRel, to: targetRel };
     }
-
-    assertNotMovingDirIntoSelf(sourceAbs, targetAbs, sourceStat.isDirectory());
-    await assertTargetNotExists(targetAbs);
-
-    await fs.rename(sourceAbs, targetAbs);
-    await updateTrashIndexAfterMove(sourceRel, targetRel);
-
-    return { from: sourceRel, to: targetRel };
   });
 }
 
@@ -413,6 +494,30 @@ export async function trashEntry(params: { path: string }): Promise<FileOpResult
     await writeTrashIndex(index);
 
     return { from: sourceRel, to: targetRel, undoTtlMs: TRASH_UNDO_TTL_MS };
+  });
+}
+
+export async function deleteEntryPermanently(params: { path: string }): Promise<{ path: string }> {
+  return withFileOpsLock(async () => {
+    const targetAbs = await resolveExistingFsPathOrThrow(params.path);
+    
+    // Prevent deleting filesystem roots (/, C:/, etc.)
+    const parsed = path.parse(targetAbs);
+    const normalizedTarget = targetAbs.replace(/\\/g, '/');
+    const normalizedRoot = parsed.root.replace(/\\/g, '/');
+    if (normalizedTarget === normalizedRoot || normalizedTarget === normalizedRoot.replace(/\/$/, '')) {
+      throw new FileOpError(403, 'forbidden', 'Cannot delete filesystem root');
+    }
+    
+    const stat = await statOrThrow(targetAbs);
+
+    if (stat.isDirectory()) {
+      await fs.rm(targetAbs, { recursive: true, force: false });
+    } else {
+      await fs.unlink(targetAbs);
+    }
+
+    return { path: targetAbs };
   });
 }
 

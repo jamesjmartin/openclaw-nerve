@@ -1,25 +1,43 @@
 /**
  * File browser API routes.
  *
- * Provides directory tree listing and file reading for the workspace
- * file browser UI. All paths are relative to the workspace root
- * (~/.openclaw/workspace/) and validated against traversal + exclusion rules.
+ * Provides directory tree listing, file reading/writing, and file operations
+ * for both workspace-relative and filesystem (absolute) scoped paths.
+ * Path validation (traversal/exclusion rules) applies to both scopes.
+ * Size limits and depth constraints are enforced where applicable.
  *
- * GET  /api/files/tree  — List directory entries (lazy, depth-limited)
- * GET  /api/files/read  — Read a text file's content
- * PUT  /api/files/write — Write/update a text file
+ * GET  /api/files/tree   — List directory entries (lazy, depth-limited)
+ * GET  /api/files/read   — Read a text file's content
+ * PUT  /api/files/write  — Write/update a text file
+ * GET  /api/files/raw    — Serve raw file content
+ * POST /api/files/rename — Rename a file or directory
+ * POST /api/files/move   — Move a file or directory
+ * POST /api/files/trash  — Move to trash (workspace-only)
+ * POST /api/files/delete — Permanently delete (fs-scope only)
+ * POST /api/files/restore— Restore from trash (workspace-only)
  * @module
  */
 
 import { Hono, type Context } from 'hono';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+
+/** Validate and parse scope parameter */
+function parseScope(rawScope: string | undefined): 'workspace' | 'fs' | null {
+  const scope = rawScope || 'workspace';
+  if (scope === 'workspace' || scope === 'fs') {
+    return scope;
+  }
+  return null;
+}
 import {
   getWorkspaceRoot,
   resolveWorkspacePath,
+  resolveFsPath,
   isExcluded,
   isBinary,
   MAX_FILE_SIZE,
+  toPosixPath,
 } from '../lib/file-utils.js';
 import {
   FileOpError,
@@ -27,6 +45,7 @@ import {
   renameEntry,
   restoreEntry,
   trashEntry,
+  deleteEntryPermanently,
 } from '../lib/file-ops.js';
 
 const app = new Hono();
@@ -49,6 +68,7 @@ async function listDirectory(
   dirPath: string,
   basePath: string,
   depth: number,
+  scope: 'workspace' | 'fs' = 'workspace',
 ): Promise<TreeEntry[]> {
   const entries: TreeEntry[] = [];
 
@@ -69,15 +89,22 @@ async function listDirectory(
     // Skip excluded names and hidden files (except specific ones)
     if (isExcluded(item.name)) continue;
 
+    // Trash handling only applies to workspace scope (fs-scope paths are absolute, never '.trash')
     const inTrash = basePath === '.trash' || basePath.startsWith('.trash/');
     if (inTrash) {
       // Internal metadata file for restore bookkeeping.
       if (item.name === '.index.json') continue;
-    } else if (item.name.startsWith('.') && item.name !== '.nerveignore' && item.name !== '.trash') {
-      continue;
+    } else if (scope === 'workspace') {
+      // Workspace: hide dotfiles except specific ones
+      if (item.name.startsWith('.') && item.name !== '.nerveignore' && item.name !== '.trash') {
+        continue;
+      }
     }
+    // Filesystem scope: show all files including dotfiles
 
-    const relativePath = basePath ? path.join(basePath, item.name) : item.name;
+    const relativePath = scope === 'fs' 
+      ? toPosixPath(path.join(dirPath, item.name))
+      : toPosixPath(basePath ? path.join(basePath, item.name) : item.name);
     const fullPath = path.join(dirPath, item.name);
 
     if (item.isDirectory()) {
@@ -86,7 +113,7 @@ async function listDirectory(
         path: relativePath,
         type: 'directory',
         children: depth > 1
-          ? await listDirectory(fullPath, relativePath, depth - 1)
+          ? await listDirectory(fullPath, relativePath, depth - 1, scope)
           : null,
       });
     } else if (item.isFile()) {
@@ -120,18 +147,31 @@ function handleFileOpError(c: Context, err: unknown) {
 // ── GET /api/files/tree ──────────────────────────────────────────────
 
 app.get('/api/files/tree', async (c) => {
-  const root = getWorkspaceRoot();
+  const scope = parseScope(c.req.query('scope'));
+  if (!scope) {
+    return c.json({ ok: false, error: 'Invalid scope parameter' }, 400);
+  }
   const subPath = c.req.query('path') || '';
   const depth = Math.min(Math.max(Number(c.req.query('depth')) || 1, 1), 5);
 
-  // Resolve the target directory
   let targetDir: string;
-  if (subPath) {
-    const resolved = await resolveWorkspacePath(subPath);
+  let rootPath: string;
+
+  if (scope === 'fs') {
+    // Filesystem scope: require absolute path
+    if (!subPath) {
+      return c.json({ ok: false, error: 'Filesystem scope requires absolute path' }, 400);
+    }
+    if (!path.isAbsolute(subPath)) {
+      return c.json({ ok: false, error: 'Path must be absolute for filesystem scope' }, 400);
+    }
+
+    const resolved = await resolveFsPath(subPath);
     if (!resolved) {
-      return c.json({ ok: false, error: 'Invalid path' }, 400);
+      return c.json({ ok: false, error: 'Invalid or excluded path' }, 403);
     }
     targetDir = resolved;
+    rootPath = resolved;
 
     // Ensure it's a directory
     try {
@@ -143,23 +183,58 @@ app.get('/api/files/tree', async (c) => {
       return c.json({ ok: false, error: 'Directory not found' }, 404);
     }
   } else {
-    targetDir = root;
+    // Workspace scope: existing behavior
+    const root = getWorkspaceRoot();
+    if (subPath) {
+      const resolved = await resolveWorkspacePath(subPath);
+      if (!resolved) {
+        return c.json({ ok: false, error: 'Invalid path' }, 400);
+      }
+      targetDir = resolved;
+
+      // Ensure it's a directory
+      try {
+        const stat = await fs.stat(targetDir);
+        if (!stat.isDirectory()) {
+          return c.json({ ok: false, error: 'Not a directory' }, 400);
+        }
+      } catch {
+        return c.json({ ok: false, error: 'Directory not found' }, 404);
+      }
+    } else {
+      targetDir = root;
+    }
+    rootPath = subPath || '.';
   }
 
-  const entries = await listDirectory(targetDir, subPath, depth);
+  const entries = await listDirectory(targetDir, rootPath, depth, scope);
 
-  return c.json({ ok: true, root: subPath || '.', entries });
+  const workspaceRoot = getWorkspaceRoot();
+  return c.json({ ok: true, scope, root: rootPath, workspaceRoot, entries });
 });
 
 // ── GET /api/files/read ──────────────────────────────────────────────
 
 app.get('/api/files/read', async (c) => {
+  const scope = parseScope(c.req.query('scope'));
+  if (!scope) {
+    return c.json({ ok: false, error: 'Invalid scope parameter' }, 400);
+  }
   const filePath = c.req.query('path');
   if (!filePath) {
     return c.json({ ok: false, error: 'Missing path parameter' }, 400);
   }
 
-  const resolved = await resolveWorkspacePath(filePath);
+  let resolved: string | null;
+  if (scope === 'fs') {
+    if (!path.isAbsolute(filePath)) {
+      return c.json({ ok: false, error: 'Path must be absolute for filesystem scope' }, 400);
+    }
+    resolved = await resolveFsPath(filePath);
+  } else {
+    resolved = await resolveWorkspacePath(filePath);
+  }
+  
   if (!resolved) {
     return c.json({ ok: false, error: 'Invalid or excluded path' }, 403);
   }
@@ -201,14 +276,18 @@ app.get('/api/files/read', async (c) => {
 // ── PUT /api/files/write ─────────────────────────────────────────────
 
 app.put('/api/files/write', async (c) => {
-  let body: { path?: string; content?: string; expectedMtime?: number };
+  let body: { path?: string; content?: string; expectedMtime?: number; scope?: string };
   try {
     body = await c.req.json();
   } catch {
     return c.json({ ok: false, error: 'Invalid JSON body' }, 400);
   }
 
-  const { path: filePath, content, expectedMtime } = body;
+  const { path: filePath, content, expectedMtime, scope: bodyScope } = body;
+  const scope = parseScope(bodyScope);
+  if (!scope) {
+    return c.json({ ok: false, error: 'Invalid scope parameter' }, 400);
+  }
 
   if (!filePath || typeof filePath !== 'string') {
     return c.json({ ok: false, error: 'Missing path' }, 400);
@@ -220,7 +299,16 @@ app.put('/api/files/write', async (c) => {
     return c.json({ ok: false, error: 'Content too large (max 1MB)' }, 413);
   }
 
-  const resolved = await resolveWorkspacePath(filePath, { allowNonExistent: true });
+  let resolved: string | null;
+  if (scope === 'fs') {
+    if (!path.isAbsolute(filePath)) {
+      return c.json({ ok: false, error: 'Path must be absolute for filesystem scope' }, 400);
+    }
+    resolved = await resolveFsPath(filePath, { allowNonExistent: true });
+  } else {
+    resolved = await resolveWorkspacePath(filePath, { allowNonExistent: true });
+  }
+  
   if (!resolved) {
     return c.json({ ok: false, error: 'Invalid or excluded path' }, 403);
   }
@@ -265,7 +353,7 @@ app.put('/api/files/write', async (c) => {
 // ── POST /api/files/rename ────────────────────────────────────────────
 
 app.post('/api/files/rename', async (c) => {
-  let body: { path?: string; newName?: string };
+  let body: { path?: string; newName?: string; scope?: string };
   try {
     body = await c.req.json();
   } catch {
@@ -279,8 +367,13 @@ app.post('/api/files/rename', async (c) => {
     return c.json({ ok: false, error: 'Missing newName' }, 400);
   }
 
+  const scope = parseScope(body.scope);
+  if (!scope) {
+    return c.json({ ok: false, error: 'Invalid scope parameter' }, 400);
+  }
+
   try {
-    const result = await renameEntry({ path: body.path, newName: body.newName });
+    const result = await renameEntry({ path: body.path, newName: body.newName, scope });
     return c.json({ ok: true, ...result });
   } catch (err) {
     return handleFileOpError(c, err);
@@ -290,7 +383,7 @@ app.post('/api/files/rename', async (c) => {
 // ── POST /api/files/move ──────────────────────────────────────────────
 
 app.post('/api/files/move', async (c) => {
-  let body: { sourcePath?: string; targetDirPath?: string };
+  let body: { sourcePath?: string; targetDirPath?: string; scope?: string };
   try {
     body = await c.req.json();
   } catch {
@@ -304,10 +397,16 @@ app.post('/api/files/move', async (c) => {
     return c.json({ ok: false, error: 'Missing targetDirPath' }, 400);
   }
 
+  const scope = parseScope(body.scope);
+  if (!scope) {
+    return c.json({ ok: false, error: 'Invalid scope parameter' }, 400);
+  }
+
   try {
     const result = await moveEntry({
       sourcePath: body.sourcePath,
       targetDirPath: body.targetDirPath,
+      scope,
     });
     return c.json({ ok: true, ...result });
   } catch (err) {
@@ -318,7 +417,7 @@ app.post('/api/files/move', async (c) => {
 // ── POST /api/files/trash ─────────────────────────────────────────────
 
 app.post('/api/files/trash', async (c) => {
-  let body: { path?: string };
+  let body: { path?: string; scope?: string };
   try {
     body = await c.req.json();
   } catch {
@@ -327,6 +426,15 @@ app.post('/api/files/trash', async (c) => {
 
   if (!body.path || typeof body.path !== 'string') {
     return c.json({ ok: false, error: 'Missing path' }, 400);
+  }
+
+  const scope = parseScope(body.scope);
+  if (!scope) {
+    return c.json({ ok: false, error: 'Invalid scope parameter' }, 400);
+  }
+
+  if (scope === 'fs') {
+    return c.json({ ok: false, error: 'Trash not supported in filesystem scope. Use /api/files/delete for permanent deletion.' }, 400);
   }
 
   try {
@@ -337,10 +445,10 @@ app.post('/api/files/trash', async (c) => {
   }
 });
 
-// ── POST /api/files/restore ───────────────────────────────────────────
+// ── POST /api/files/delete ────────────────────────────────────────────
 
-app.post('/api/files/restore', async (c) => {
-  let body: { path?: string };
+app.post('/api/files/delete', async (c) => {
+  let body: { path?: string; scope?: string };
   try {
     body = await c.req.json();
   } catch {
@@ -349,6 +457,47 @@ app.post('/api/files/restore', async (c) => {
 
   if (!body.path || typeof body.path !== 'string') {
     return c.json({ ok: false, error: 'Missing path' }, 400);
+  }
+
+  const scope = parseScope(body.scope);
+  if (!scope) {
+    return c.json({ ok: false, error: 'Invalid scope parameter' }, 400);
+  }
+
+  if (scope !== 'fs') {
+    return c.json({ ok: false, error: 'Delete endpoint only supports filesystem scope. Use /api/files/trash for workspace items.' }, 400);
+  }
+
+  try {
+    const result = await deleteEntryPermanently({ path: body.path });
+    return c.json({ ok: true, ...result });
+  } catch (err) {
+    return handleFileOpError(c, err);
+  }
+});
+
+// ── POST /api/files/restore ───────────────────────────────────────────
+
+app.post('/api/files/restore', async (c) => {
+  let body: { path?: string; scope?: string };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ ok: false, error: 'Invalid JSON body' }, 400);
+  }
+
+  if (!body.path || typeof body.path !== 'string') {
+    return c.json({ ok: false, error: 'Missing path' }, 400);
+  }
+
+  const scope = parseScope(body.scope);
+  if (!scope) {
+    return c.json({ ok: false, error: 'Invalid scope parameter' }, 400);
+  }
+
+  // Restore is workspace-only (trash system requires workspace-relative paths)
+  if (scope === 'fs') {
+    return c.json({ ok: false, error: 'Restore not supported in filesystem scope. Only workspace items can be restored from trash.' }, 400);
   }
 
   try {
@@ -380,12 +529,25 @@ export function isImage(name: string): boolean {
 }
 
 app.get('/api/files/raw', async (c) => {
+  const scope = parseScope(c.req.query('scope'));
+  if (!scope) {
+    return c.json({ ok: false, error: 'Invalid scope parameter' }, 400);
+  }
   const filePath = c.req.query('path');
   if (!filePath) {
     return c.json({ ok: false, error: 'Missing path parameter' }, 400);
   }
 
-  const resolved = await resolveWorkspacePath(filePath);
+  let resolved: string | null;
+  if (scope === 'fs') {
+    if (!path.isAbsolute(filePath)) {
+      return c.json({ ok: false, error: 'Path must be absolute for filesystem scope' }, 400);
+    }
+    resolved = await resolveFsPath(filePath);
+  } else {
+    resolved = await resolveWorkspacePath(filePath);
+  }
+  
   if (!resolved) {
     return c.json({ ok: false, error: 'Invalid or excluded path' }, 403);
   }

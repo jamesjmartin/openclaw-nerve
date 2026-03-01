@@ -6,10 +6,11 @@
  */
 
 import { useRef, useState, useCallback, useEffect } from 'react';
-import { PanelLeftClose, PanelLeftOpen, RefreshCw, Pencil, Trash2, RotateCcw, X } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen, RefreshCw, Pencil, Trash2, RotateCcw, X, Home, ArrowUp } from 'lucide-react';
 import { FileTreeNode } from './FileTreeNode';
 import { useFileTree } from './hooks/useFileTree';
 import type { TreeEntry } from './types';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 
 const MIN_WIDTH = 160;
 const MAX_WIDTH = 400;
@@ -76,8 +77,17 @@ export function FileTreePanel({
 }: FileTreePanelProps) {
   const {
     entries, loading, error, expandedPaths, selectedPath,
-    loadingPaths, toggleDirectory, selectFile, refresh, handleFileChange,
+    loadingPaths, rootPath, scope, toggleDirectory, selectFile, refresh, handleFileChange,
+    navigateHome, navigateUp,
   } = useFileTree();
+
+  // Compute disabled states for navigation buttons
+  const isAtWorkspaceRoot = scope === 'workspace' && rootPath === '';
+  const isAtFilesystemRoot = scope === 'fs' && (
+    rootPath === '/' ||
+    /^[A-Za-z]:\/$/.test(rootPath) ||
+    /^\/\/[^/]+\/[^/]+\/?$/.test(rootPath) // UNC root
+  );
 
   // React to external file changes
   const prevChangedPath = useRef<string | null>(null);
@@ -111,6 +121,8 @@ export function FileTreePanel({
   const [dropTargetPath, setDropTargetPath] = useState<string | null>(null);
 
   const [toast, setToast] = useState<FileTreeToast | null>(null);
+  const [permanentDeleteTarget, setPermanentDeleteTarget] = useState<TreeEntry | null>(null);
+  const [showPermanentDeleteConfirm, setShowPermanentDeleteConfirm] = useState(false);
   const toastTimerRef = useRef<number | null>(null);
 
   const clearToastTimer = useCallback(() => {
@@ -253,9 +265,11 @@ export function FileTreePanel({
 
   const runMove = useCallback(async (sourcePath: string, targetDirPath: string) => {
     try {
+      const sourceScope = scope;
+
       // Dragging onto .trash behaves like explicit trash action.
       if (targetDirPath === '.trash' && !sourcePath.startsWith('.trash/')) {
-        const result = await postFileOp<FileOpResult>('/api/files/trash', { path: sourcePath });
+        const result = await postFileOp<FileOpResult>('/api/files/trash', { path: sourcePath, scope: sourceScope });
         onCloseOpenPaths?.(result.from);
         refresh();
         showToast(
@@ -273,6 +287,7 @@ export function FileTreePanel({
       const result = await postFileOp<FileOpResult>('/api/files/move', {
         sourcePath,
         targetDirPath,
+        scope: sourceScope,
       });
       refresh();
       onRemapOpenPaths?.(result.from, result.to);
@@ -282,7 +297,7 @@ export function FileTreePanel({
       const message = err instanceof Error ? err.message : 'Move failed';
       showToast({ type: 'error', message }, 4500);
     }
-  }, [onCloseOpenPaths, onRemapOpenPaths, postFileOp, refresh, selectFile, showToast]);
+  }, [onCloseOpenPaths, onRemapOpenPaths, postFileOp, refresh, scope, selectFile, showToast]);
 
   const canDropToTarget = useCallback((source: TreeEntry, targetDirPath: string): boolean => {
     if (source.path === '.trash') return false;
@@ -339,6 +354,7 @@ export function FileTreePanel({
       const result = await postFileOp<FileOpResult>('/api/files/rename', {
         path: renameTargetPath,
         newName: nextName,
+        scope,
       });
       cancelRename();
       refresh();
@@ -352,7 +368,7 @@ export function FileTreePanel({
     } finally {
       renameInFlightRef.current = false;
     }
-  }, [cancelRename, onRemapOpenPaths, postFileOp, refresh, renameTargetPath, renameValue, selectFile, showToast]);
+  }, [cancelRename, onRemapOpenPaths, postFileOp, refresh, renameTargetPath, renameValue, scope, selectFile, showToast]);
 
   const moveToTrash = useCallback(async (entry: TreeEntry) => {
     if (entry.path === '.trash' || entry.path.startsWith('.trash/')) {
@@ -361,8 +377,17 @@ export function FileTreePanel({
       return;
     }
 
+    // Filesystem scope: permanent delete with confirmation
+    if (scope === 'fs') {
+      setPermanentDeleteTarget(entry);
+      setShowPermanentDeleteConfirm(true);
+      setContextMenu(null);
+      return;
+    }
+
+    // Workspace scope: trash with undo
     try {
-      const result = await postFileOp<FileOpResult>('/api/files/trash', { path: entry.path });
+      const result = await postFileOp<FileOpResult>('/api/files/trash', { path: entry.path, scope });
       onCloseOpenPaths?.(result.from);
       refresh();
       setContextMenu(null);
@@ -380,7 +405,28 @@ export function FileTreePanel({
       showToast({ type: 'error', message }, 4500);
       setContextMenu(null);
     }
-  }, [onCloseOpenPaths, postFileOp, refresh, showToast]);
+  }, [onCloseOpenPaths, postFileOp, refresh, scope, showToast]);
+
+  const cancelPermanentDelete = useCallback(() => {
+    setShowPermanentDeleteConfirm(false);
+    setPermanentDeleteTarget(null);
+  }, []);
+
+  const confirmPermanentDelete = useCallback(async () => {
+    const entry = permanentDeleteTarget;
+    if (!entry) return;
+    setShowPermanentDeleteConfirm(false);
+    setPermanentDeleteTarget(null);
+    try {
+      await postFileOp<{ ok: boolean; path: string }>('/api/files/delete', { path: entry.path, scope: 'fs' });
+      onCloseOpenPaths?.(entry.path);
+      refresh();
+      showToast({ type: 'success', message: `Permanently deleted ${basename(entry.path)}` }, 3000);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Permanent delete failed';
+      showToast({ type: 'error', message }, 4500);
+    }
+  }, [onCloseOpenPaths, permanentDeleteTarget, postFileOp, refresh, showToast]);
 
   const restoreEntry = useCallback(async (entryPath: string) => {
     try {
@@ -445,11 +491,12 @@ export function FileTreePanel({
 
   const handleRootDragOver = useCallback((event: React.DragEvent) => {
     if (!dragSource) return;
-    if (!canDropToTarget(dragSource, '')) return;
+    const targetPath = rootPath ?? '';
+    if (!canDropToTarget(dragSource, targetPath)) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
     setDropTargetPath('.');
-  }, [canDropToTarget, dragSource]);
+  }, [canDropToTarget, dragSource, rootPath]);
 
   const handleRootDrop = useCallback((event: React.DragEvent) => {
     event.preventDefault();
@@ -459,9 +506,10 @@ export function FileTreePanel({
     setDragSource(null);
     setDropTargetPath(null);
 
-    if (!canDropToTarget(source, '')) return;
-    void runMove(source.path, '');
-  }, [canDropToTarget, dragSource, runMove]);
+    const targetPath = rootPath ?? '';
+    if (!canDropToTarget(source, targetPath)) return;
+    void runMove(source.path, targetPath);
+  }, [canDropToTarget, dragSource, rootPath, runMove]);
 
   if (collapsed) {
     return (
@@ -484,6 +532,7 @@ export function FileTreePanel({
   const showRestore = menuInTrash;
   const showRename = Boolean(menuEntry && menuPath !== '.trash');
   const showTrashAction = Boolean(menuEntry && !menuPath.startsWith('.trash') && menuPath !== '.trash');
+  const showOpen = Boolean(menuEntry && menuEntry.type === 'file');
 
   return (
     <div
@@ -500,7 +549,7 @@ export function FileTreePanel({
     >
       {/* Header */}
       <div
-        className={`flex items-center justify-between px-3 py-2 border-b border-border ${dropTargetPath === '.' ? 'bg-primary/15 ring-1 ring-primary/40' : ''}`}
+        className={`flex flex-col border-b border-border ${dropTargetPath === '.' ? 'bg-primary/15 ring-1 ring-primary/40' : ''}`}
         onDragOver={handleRootDragOver}
         onDragLeave={(e) => {
           if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
@@ -508,27 +557,62 @@ export function FileTreePanel({
         }}
         onDrop={handleRootDrop}
       >
-        <span className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
-          Workspace
-        </span>
-        <div className="flex items-center gap-0.5">
-          <button
-            onClick={refresh}
-            className="p-1 rounded hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
-            title="Refresh file tree"
-            aria-label="Refresh file tree"
-          >
-            <RefreshCw size={12} />
-          </button>
-          <button
-            onClick={toggleCollapsed}
-            className="p-1 rounded hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
-            title="Close file explorer (Ctrl+B)"
-            aria-label="Close file explorer"
-          >
-            <PanelLeftClose size={12} />
-          </button>
+        <div className="flex items-center justify-between px-3 py-2">
+          <span className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
+            {scope === 'fs' ? 'Filesystem' : 'Workspace'}
+          </span>
+          <div className="flex items-center gap-0.5">
+            <button
+              onClick={navigateHome}
+              disabled={isAtWorkspaceRoot}
+              className={`p-1 rounded transition-colors ${
+                isAtWorkspaceRoot
+                  ? 'text-muted-foreground/30 cursor-not-allowed'
+                  : 'hover:bg-muted/50 text-muted-foreground hover:text-foreground'
+              }`}
+              title="Navigate to workspace root"
+              aria-label="Navigate to workspace root"
+              aria-disabled={isAtWorkspaceRoot}
+            >
+              <Home size={12} />
+            </button>
+            <button
+              onClick={navigateUp}
+              disabled={isAtFilesystemRoot}
+              className={`p-1 rounded transition-colors ${
+                isAtFilesystemRoot
+                  ? 'text-muted-foreground/30 cursor-not-allowed'
+                  : 'hover:bg-muted/50 text-muted-foreground hover:text-foreground'
+              }`}
+              title="Navigate to parent directory"
+              aria-label="Navigate to parent directory"
+              aria-disabled={isAtFilesystemRoot}
+            >
+              <ArrowUp size={12} />
+            </button>
+            <button
+              onClick={refresh}
+              className="p-1 rounded hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
+              title="Refresh file tree"
+              aria-label="Refresh file tree"
+            >
+              <RefreshCw size={12} />
+            </button>
+            <button
+              onClick={toggleCollapsed}
+              className="p-1 rounded hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
+              title="Close file explorer (Ctrl+B)"
+              aria-label="Close file explorer"
+            >
+              <PanelLeftClose size={12} />
+            </button>
+          </div>
         </div>
+        {scope === 'fs' && rootPath && (
+          <div className="px-3 pb-2 text-[9px] text-muted-foreground/70 font-mono truncate" title={rootPath}>
+            {rootPath}
+          </div>
+        )}
       </div>
 
       {/* Tree content */}
@@ -612,13 +696,25 @@ export function FileTreePanel({
             </button>
           )}
 
+          {showOpen && (
+            <button
+              className="w-full px-3 py-1.5 text-left text-xs text-foreground hover:bg-muted/60 flex items-center gap-2"
+              onClick={() => {
+                setContextMenu(null);
+                onOpenFile(menuEntry.path);
+              }}
+            >
+              Open
+            </button>
+          )}
+
           {showTrashAction && (
             <button
               className="w-full px-3 py-1.5 text-left text-xs text-destructive hover:bg-destructive/10 flex items-center gap-2"
               onClick={() => { void moveToTrash(menuEntry); }}
             >
               <Trash2 size={12} />
-              Move to Trash
+              {scope === 'fs' ? 'Delete' : 'Move to Trash'}
             </button>
           )}
 
@@ -629,6 +725,21 @@ export function FileTreePanel({
           )}
         </div>
       )}
+
+      <ConfirmDialog
+        open={showPermanentDeleteConfirm}
+        title="Permanently delete"
+        message={
+          permanentDeleteTarget
+            ? `Permanently delete ${basename(permanentDeleteTarget.path)}? This action cannot be undone.`
+            : 'This action cannot be undone.'
+        }
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        onConfirm={() => { void confirmPermanentDelete(); }}
+        onCancel={cancelPermanentDelete}
+        variant="danger"
+      />
 
       {/* Toast */}
       {toast && (

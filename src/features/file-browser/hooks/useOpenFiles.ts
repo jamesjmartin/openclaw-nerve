@@ -35,6 +35,21 @@ function basename(filePath: string): string {
   return filePath.split('/').pop() || filePath;
 }
 
+function isAbsolutePath(p: string): boolean {
+  if (!p) return false;
+  // Unix absolute path
+  if (p.startsWith('/')) return true;
+  // Windows absolute path (e.g., C:\... or C:/...)
+  if (/^[A-Za-z]:[/\\]/.test(p)) return true;
+  // UNC path (e.g., \\server\share or //server/share)
+  if (/^[/\\]{2}[^/\\]+[/\\]/.test(p)) return true;
+  return false;
+}
+
+function getScope(path: string): 'workspace' | 'fs' {
+  return isAbsolutePath(path) ? 'fs' : 'workspace';
+}
+
 function matchesPathPrefix(candidatePath: string, prefix: string): boolean {
   return candidatePath === prefix || candidatePath.startsWith(`${prefix}/`);
 }
@@ -66,7 +81,9 @@ export function useOpenFiles() {
     const files: OpenFile[] = [];
     for (const p of paths) {
       try {
-        const res = await fetch(`/api/files/read?path=${encodeURIComponent(p)}`);
+        const scope = getScope(p);
+        const scopeParam = scope === 'fs' ? `&scope=fs` : '';
+        const res = await fetch(`/api/files/read?path=${encodeURIComponent(p)}${scopeParam}`);
         if (!res.ok) continue;
         const data = await res.json();
         if (!data.ok) continue;
@@ -143,7 +160,9 @@ export function useOpenFiles() {
 
     // Fetch content for text files
     try {
-      const res = await fetch(`/api/files/read?path=${encodeURIComponent(filePath)}`);
+      const scope = getScope(filePath);
+      const scopeParam = scope === 'fs' ? `&scope=fs` : '';
+      const res = await fetch(`/api/files/read?path=${encodeURIComponent(filePath)}${scopeParam}`);
       const data = await res.json();
 
       setOpenFiles((prev) =>
@@ -211,6 +230,7 @@ export function useOpenFiles() {
       // from triggering the lock overlay while we wait for the response
       savingPaths.current.add(filePath);
 
+      const scope = getScope(filePath);
       const res = await fetch('/api/files/write', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -218,6 +238,7 @@ export function useOpenFiles() {
           path: filePath,
           content: file.content,
           expectedMtime: file.mtime,
+          scope,
         }),
       });
       const data = await res.json();
@@ -253,7 +274,9 @@ export function useOpenFiles() {
 
   const reloadFile = useCallback(async (filePath: string) => {
     try {
-      const res = await fetch(`/api/files/read?path=${encodeURIComponent(filePath)}`);
+      const scope = getScope(filePath);
+      const scopeParam = scope === 'fs' ? `&scope=fs` : '';
+      const res = await fetch(`/api/files/read?path=${encodeURIComponent(filePath)}${scopeParam}`);
       const data = await res.json();
 
       if (!data.ok) {
