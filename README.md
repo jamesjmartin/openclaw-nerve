@@ -54,7 +54,7 @@ Create recurring jobs and one-shot reminders. Every scheduled run shows up as it
 | | |
 |---|---|
 | **Streaming chat** | Markdown, syntax highlighting, diff views, image paste, file previews. All rendering as it streams |
-| **File browser** | Browse your workspace and open files in tabs |
+| **File browser** | Browse your workspace, rename, move, trash, and restore files. Open files in tabs |
 | **Built-in editor** | CodeMirror editor with syntax highlighting, conflict-safe saves, and automatic lock protection during concurrent agent edits |
 | **Multi-session** | Session tree with sub-agents, per-session model overrides, unread indicators |
 | **Kanban board** | Drag-and-drop task management with agent execution, review workflow, and proposal inbox |
@@ -69,6 +69,7 @@ Create recurring jobs and one-shot reminders. Every scheduled run shows up as it
 | **Code actions** | Copy or save-to-file buttons on every code block |
 | **API key management** | Add provider keys from settings — writes to .env and hot-reloads, no restart needed |
 | **14 themes** | Dark, light, and everything in between. Resizable panels, custom fonts |
+| **Auto-updater** | Built-in updater with automatic rollback. One command to update, verify, and restart |
 
 ## Get Started
 
