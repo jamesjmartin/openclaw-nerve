@@ -33,6 +33,11 @@ interface SettingsDrawerProps {
   agentName?: string;
   // Auth
   onLogout?: () => void;
+  // Gateway restart
+  onGatewayRestart?: () => void;
+  gatewayRestarting?: boolean;
+  gatewayRestartNotice?: { ok: boolean; message: string } | null;
+  onDismissNotice?: () => void;
 }
 
 type SettingsCategory = 'advanced' | 'audio' | 'appearance';
@@ -78,6 +83,10 @@ export function SettingsDrawer({
   onToggleWakeWord,
   agentName,
   onLogout,
+  onGatewayRestart,
+  gatewayRestarting,
+  gatewayRestartNotice,
+  onDismissNotice,
 }: SettingsDrawerProps) {
   const drawerRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -237,6 +246,10 @@ export function SettingsDrawer({
                 onTokenChange={onTokenChange}
                 onReconnect={onReconnect}
                 connectionState={connectionState}
+                onGatewayRestart={onGatewayRestart}
+                gatewayRestarting={gatewayRestarting}
+                gatewayRestartNotice={gatewayRestartNotice}
+                onDismissNotice={onDismissNotice}
               />
             )}
           </div>

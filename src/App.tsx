@@ -13,6 +13,7 @@ import { useSettings } from '@/contexts/SettingsContext';
 import { getSessionKey } from '@/types';
 import { useConnectionManager } from '@/hooks/useConnectionManager';
 import { useDashboardData } from '@/hooks/useDashboardData';
+import { useGatewayRestart } from '@/hooks/useGatewayRestart';
 import { ConnectDialog } from '@/features/connect/ConnectDialog';
 import { TopBar } from '@/components/TopBar';
 import { StatusBar } from '@/components/StatusBar';
@@ -122,6 +123,17 @@ export default function App({ onLogout }: AppProps) {
   const [logGlow, setLogGlow] = useState(false);
   const prevLogCount = useRef(0);
   const chatPanelRef = useRef<ChatPanelHandle>(null);
+
+  // Gateway restart
+  const {
+    showGatewayRestartConfirm,
+    gatewayRestarting,
+    gatewayRestartNotice,
+    handleGatewayRestart,
+    cancelGatewayRestart,
+    confirmGatewayRestart,
+    dismissNotice,
+  } = useGatewayRestart();
 
   // Responsive layout state (chat-first on smaller viewports)
   const [isCompactLayout, setIsCompactLayout] = useState(() => {
@@ -447,6 +459,10 @@ export default function App({ onLogout }: AppProps) {
             onToggleWakeWord={handleToggleWakeWord}
             agentName={agentName}
             onLogout={onLogout}
+            onGatewayRestart={handleGatewayRestart}
+            gatewayRestarting={gatewayRestarting}
+            gatewayRestartNotice={gatewayRestartNotice}
+            onDismissNotice={dismissNotice}
           />
         </Suspense>
       </PanelErrorBoundary>
@@ -508,6 +524,18 @@ export default function App({ onLogout }: AppProps) {
         onConfirm={confirmReset}
         onCancel={cancelReset}
         variant="danger"
+      />
+
+      {/* Gateway Restart Confirmation */}
+      <ConfirmDialog
+        open={showGatewayRestartConfirm}
+        title="Restart OpenClaw Gateway"
+        message="This will briefly interrupt gateway connectivity. Continue?"
+        confirmLabel="Restart"
+        cancelLabel="Cancel"
+        onConfirm={confirmGatewayRestart}
+        onCancel={cancelGatewayRestart}
+        variant="warning"
       />
 
       {/* Spawn Agent Dialog (from command palette) */}

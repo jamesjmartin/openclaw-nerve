@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { RefreshCw, Eye, EyeOff } from 'lucide-react';
+import { RefreshCw, Eye, EyeOff, RotateCw } from 'lucide-react';
 import { DEFAULT_GATEWAY_WS } from '@/lib/constants';
 
 interface ConnectionSettingsProps {
@@ -9,6 +9,10 @@ interface ConnectionSettingsProps {
   onTokenChange: (token: string) => void;
   onReconnect: () => void;
   connectionState: 'disconnected' | 'connecting' | 'connected' | 'reconnecting';
+  onGatewayRestart?: () => void;
+  gatewayRestarting?: boolean;
+  gatewayRestartNotice?: { ok: boolean; message: string } | null;
+  onDismissNotice?: () => void;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -25,7 +29,7 @@ const STATUS_LABELS: Record<string, string> = {
   disconnected: 'DISCONNECTED',
 };
 
-/** Settings section for gateway URL, auth token, and reconnection. */
+/** Settings section for gateway URL, auth token, reconnection, and gateway restart. */
 export function ConnectionSettings({
   url,
   token,
@@ -33,6 +37,10 @@ export function ConnectionSettings({
   onTokenChange,
   onReconnect,
   connectionState,
+  onGatewayRestart,
+  gatewayRestarting = false,
+  gatewayRestartNotice,
+  onDismissNotice,
 }: ConnectionSettingsProps) {
   const [showToken, setShowToken] = useState(false);
 
@@ -91,6 +99,41 @@ export function ConnectionSettings({
           </button>
         </div>
       </label>
+      {/* Gateway Service */}
+      {onGatewayRestart && (
+        <>
+          <div className="border-t border-border/40 my-4" />
+          <h3 className="text-[10px] font-bold tracking-[1.5px] uppercase text-muted-foreground flex items-center gap-2">
+            <span className="text-primary">◆</span>
+            GATEWAY SERVICE
+          </h3>
+          <button
+            type="button"
+            onClick={onGatewayRestart}
+            disabled={gatewayRestarting}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 text-[11px] font-mono text-muted-foreground hover:text-orange-400 hover:bg-orange-400/10 border border-border hover:border-orange-400/30 rounded-sm transition-colors uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <RotateCw size={12} aria-hidden="true" className={gatewayRestarting ? 'animate-spin' : ''} />
+            {gatewayRestarting ? 'Restarting…' : 'Restart Gateway'}
+          </button>
+          {gatewayRestartNotice && (
+            <button
+              type="button"
+              onClick={onDismissNotice}
+              aria-label="Dismiss restart notice"
+              className={`w-full px-3 py-2 text-[11px] font-mono flex items-center gap-2 border rounded-sm cursor-pointer hover:opacity-90 ${
+                gatewayRestartNotice.ok
+                  ? 'bg-green-900/20 text-green-300 border-green-700/40'
+                  : 'bg-red-900/20 text-red-300 border-red-700/40'
+              }`}
+              title="Click to dismiss"
+            >
+              <span>{gatewayRestartNotice.ok ? '✓' : '⚠'}</span>
+              <span className="whitespace-pre-wrap text-left">{gatewayRestartNotice.message}</span>
+            </button>
+          )}
+        </>
+      )}
     </div>
   );
 }
