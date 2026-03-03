@@ -105,6 +105,9 @@ export const config = {
   passwordHash: process.env.NERVE_PASSWORD_HASH || '',
   sessionSecret: process.env.NERVE_SESSION_SECRET || '',
   sessionTtlMs: Number(process.env.NERVE_SESSION_TTL || 30 * 24 * 60 * 60 * 1000), // 30 days
+
+  // File browser — custom workspace paths (comma-separated absolute paths)
+  fileBrowserPaths: process.env.NERVE_WORKSPACE_PATHS || '',
 } as const;
 
 // ─── Typed config mutation ──────────────────────────────────────────────────

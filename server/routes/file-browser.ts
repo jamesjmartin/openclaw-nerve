@@ -16,6 +16,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {
   getWorkspaceRoot,
+  getWorkspaceRoots,
+  isCustomWorkspace,
   resolveWorkspacePath,
   isExcluded,
   isBinary,
@@ -23,6 +25,7 @@ import {
 } from '../lib/file-utils.js';
 import {
   FileOpError,
+  deleteEntry,
   moveEntry,
   renameEntry,
   restoreEntry,
@@ -117,31 +120,60 @@ function handleFileOpError(c: Context, err: unknown) {
   return c.json({ ok: false, error: message }, 500);
 }
 
+// ── GET /api/files/workspace-info ────────────────────────────────────
+
+app.get('/api/files/workspace-info', (c) => {
+  const roots = getWorkspaceRoots();
+  const custom = isCustomWorkspace();
+  return c.json({
+    ok: true,
+    isCustomWorkspace: custom,
+    defaultRoot: getWorkspaceRoot(),
+    workspaces: roots.map((root, index) => ({
+      index,
+      root,
+      name: path.basename(root),
+    })),
+  });
+});
+
 // ── GET /api/files/tree ──────────────────────────────────────────────
 
 app.get('/api/files/tree', async (c) => {
-  const root = getWorkspaceRoot();
+  // Optional root param selects which workspace root to list
+  const rootParam = c.req.query('root');
+  const root = rootParam || getWorkspaceRoot();
+
+  // Validate the root is an allowed workspace root
+  if (rootParam) {
+    const allowedRoots = getWorkspaceRoots();
+    if (!allowedRoots.includes(rootParam)) {
+      return c.json({ ok: false, error: 'Invalid workspace root' }, 400);
+    }
+  }
+
   const subPath = c.req.query('path') || '';
   const depth = Math.min(Math.max(Number(c.req.query('depth')) || 1, 1), 5);
 
   // Resolve the target directory
   let targetDir: string;
   if (subPath) {
-    const resolved = await resolveWorkspacePath(subPath);
-    if (!resolved) {
+    // Resolve subPath relative to the selected workspace root
+    const resolved = path.resolve(root, path.normalize(subPath));
+    if (!resolved.startsWith(root + path.sep) && resolved !== root) {
       return c.json({ ok: false, error: 'Invalid path' }, 400);
     }
-    targetDir = resolved;
 
     // Ensure it's a directory
     try {
-      const stat = await fs.stat(targetDir);
+      const stat = await fs.stat(resolved);
       if (!stat.isDirectory()) {
         return c.json({ ok: false, error: 'Not a directory' }, 400);
       }
     } catch {
       return c.json({ ok: false, error: 'Directory not found' }, 404);
     }
+    targetDir = resolved;
   } else {
     targetDir = root;
   }
@@ -330,6 +362,13 @@ app.post('/api/files/trash', async (c) => {
   }
 
   try {
+    // Custom workspaces use permanent deletion (no trash)
+    if (isCustomWorkspace()) {
+      const result = await deleteEntry({ path: body.path });
+      return c.json({ ok: true, ...result });
+    }
+
+    // Default workspace: use trash (existing behavior)
     const result = await trashEntry({ path: body.path });
     return c.json({ ok: true, ...result });
   } catch (err) {

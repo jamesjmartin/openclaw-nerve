@@ -48,12 +48,20 @@ function isTrashItemPath(filePath: string): boolean {
   return filePath.startsWith('.trash/') && filePath !== '.trash';
 }
 
+interface WorkspaceInfo {
+  index: number;
+  root: string;
+  name: string;
+}
+
 interface FileTreePanelProps {
   onOpenFile: (path: string) => void;
   onRemapOpenPaths?: (fromPath: string, toPath: string) => void;
   onCloseOpenPaths?: (pathPrefix: string) => void;
   /** Called externally when a file changes (SSE) — refreshes affected directory */
   lastChangedPath?: string | null;
+  /** Callback to report workspace info (for SSE path conversion) */
+  onWorkspaceInfo?: (info: { isCustom: boolean; defaultRoot: string; workspaces: WorkspaceInfo[] }) => void;
 }
 
 interface FileOpResult {
@@ -73,11 +81,49 @@ export function FileTreePanel({
   onRemapOpenPaths,
   onCloseOpenPaths,
   lastChangedPath,
+  onWorkspaceInfo,
 }: FileTreePanelProps) {
+  // Workspace info state
+  const [workspaces, setWorkspaces] = useState<WorkspaceInfo[]>([]);
+  const [activeWorkspaceRoot, setActiveWorkspaceRoot] = useState<string | undefined>(undefined);
+  const [isCustomWorkspace, setIsCustomWorkspace] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<TreeEntry | null>(null);
+
+  // Fetch workspace info on mount
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/files/workspace-info')
+      .then(res => res.json())
+      .then((data: { ok: boolean; isCustomWorkspace: boolean; defaultRoot: string; workspaces: WorkspaceInfo[] }) => {
+        if (cancelled || !data.ok) return;
+        setWorkspaces(data.workspaces);
+        setIsCustomWorkspace(data.isCustomWorkspace);
+        if (data.workspaces.length > 0) {
+          setActiveWorkspaceRoot(data.workspaces[0].root);
+        }
+        onWorkspaceInfo?.({
+          isCustom: data.isCustomWorkspace,
+          defaultRoot: data.defaultRoot,
+          workspaces: data.workspaces,
+        });
+      })
+      .catch(() => { /* ignore — tree will still work with defaults */ });
+    return () => { cancelled = true; };
+  }, [onWorkspaceInfo]);
+
   const {
     entries, loading, error, expandedPaths, selectedPath,
     loadingPaths, toggleDirectory, selectFile, refresh, handleFileChange,
-  } = useFileTree();
+  } = useFileTree(activeWorkspaceRoot);
+
+  // Wrap onOpenFile to construct full path from workspace root + relative path
+  const handleOpenFile = useCallback((relativePath: string) => {
+    if (activeWorkspaceRoot) {
+      onOpenFile(`${activeWorkspaceRoot}/${relativePath}`);
+    } else {
+      onOpenFile(relativePath);
+    }
+  }, [activeWorkspaceRoot, onOpenFile]);
 
   // React to external file changes
   const prevChangedPath = useRef<string | null>(null);
@@ -531,6 +577,26 @@ export function FileTreePanel({
         </div>
       </div>
 
+      {/* Workspace tabs (only show if multiple workspaces) */}
+      {workspaces.length > 1 && (
+        <div className="flex gap-1 px-2 py-1 border-b border-border overflow-x-auto">
+          {workspaces.map((workspace) => (
+            <button
+              key={workspace.index}
+              onClick={() => setActiveWorkspaceRoot(workspace.root)}
+              className={`px-2 py-1 text-[10px] font-medium rounded transition-colors whitespace-nowrap ${
+                activeWorkspaceRoot === workspace.root
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+              }`}
+              title={workspace.root}
+            >
+              {workspace.name}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Tree content */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden py-1" role="tree" aria-label="File explorer">
         {loading ? (
@@ -562,7 +628,7 @@ export function FileTreePanel({
               selectedPath={selectedPath}
               loadingPaths={loadingPaths}
               onToggleDir={toggleDirectory}
-              onOpenFile={onOpenFile}
+              onOpenFile={handleOpenFile}
               onSelect={selectFile}
               onContextMenu={handleContextMenu}
               dragSourcePath={dragSource?.path || null}
@@ -615,10 +681,17 @@ export function FileTreePanel({
           {showTrashAction && (
             <button
               className="w-full px-3 py-1.5 text-left text-xs text-destructive hover:bg-destructive/10 flex items-center gap-2"
-              onClick={() => { void moveToTrash(menuEntry); }}
+              onClick={() => {
+                if (isCustomWorkspace) {
+                  setConfirmDelete(menuEntry);
+                  setContextMenu(null);
+                } else {
+                  void moveToTrash(menuEntry);
+                }
+              }}
             >
               <Trash2 size={12} />
-              Move to Trash
+              {isCustomWorkspace ? 'Permanently Delete' : 'Move to Trash'}
             </button>
           )}
 
@@ -651,6 +724,35 @@ export function FileTreePanel({
           >
             <X size={12} />
           </button>
+        </div>
+      )}
+
+      {/* Permanent Delete Confirmation Dialog */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50">
+          <div className="bg-card border border-border rounded-lg shadow-xl p-4 max-w-sm mx-4">
+            <h3 className="text-sm font-semibold text-foreground mb-2">Permanently Delete</h3>
+            <p className="text-xs text-muted-foreground mb-4">
+              This will permanently delete &ldquo;{confirmDelete.name}&rdquo; and cannot be undone. Continue?
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                className="px-3 py-1.5 text-xs rounded border border-border hover:bg-muted/50 transition-colors"
+                onClick={() => setConfirmDelete(null)}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-3 py-1.5 text-xs rounded bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
+                onClick={() => {
+                  void moveToTrash(confirmDelete);
+                  setConfirmDelete(null);
+                }}
+              >
+                Delete Forever
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

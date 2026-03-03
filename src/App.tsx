@@ -90,6 +90,12 @@ export default function App({ onLogout }: AppProps) {
   // Track last changed file path for tree refresh
   const [lastChangedPath, setLastChangedPath] = useState<string | null>(null);
 
+  // Workspace info — default root used for SSE path conversion
+  const defaultWorkspaceRootRef = useRef<string>('');
+  const handleWorkspaceInfo = useCallback((info: { isCustom: boolean; defaultRoot: string; workspaces: { index: number; root: string; name: string }[] }) => {
+    defaultWorkspaceRootRef.current = info.defaultRoot;
+  }, []);
+
   // File browser state
   const {
     openFiles, activeTab, setActiveTab,
@@ -113,9 +119,12 @@ export default function App({ onLogout }: AppProps) {
   }, [saveFile]);
 
   // Single file.changed handler — feeds both open files and tree refresh
-  const onFileChanged = useCallback((path: string) => {
-    handleFileChanged(path);
-    setLastChangedPath(path);
+  // SSE emits relative paths from default workspace; convert to full path for open file matching
+  const onFileChanged = useCallback((changedPath: string) => {
+    const root = defaultWorkspaceRootRef.current;
+    const fullPath = root ? `${root}/${changedPath}` : changedPath;
+    handleFileChanged(fullPath);
+    setLastChangedPath(changedPath); // tree still uses relative paths
   }, [handleFileChanged]);
 
   // Dashboard data (extracted hook) — single SSE connection handles all events
@@ -524,6 +533,7 @@ export default function App({ onLogout }: AppProps) {
               lastChangedPath={lastChangedPath}
               onRemapOpenPaths={remapOpenPaths}
               onCloseOpenPaths={closeOpenPathsByPrefix}
+              onWorkspaceInfo={handleWorkspaceInfo}
             />
           </PanelErrorBoundary>
         )}

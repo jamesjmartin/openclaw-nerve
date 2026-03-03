@@ -1047,11 +1047,38 @@ Lists all OpenClaw skills via `openclaw skills list --json`.
 
 ## File Browser
 
-Browse, read, and edit workspace files. All paths are restricted to the workspace directory with traversal protection.
+Browse, read, and edit workspace files. All paths are restricted to the workspace directory with traversal protection. Supports multiple workspaces when `NERVE_WORKSPACE_PATHS` is configured.
+
+### `GET /api/files/workspace-info`
+
+Returns workspace configuration and available workspaces.
+
+**Query Parameters:** None
+
+**Response:**
+```json
+{
+  "ok": true,
+  "isCustomWorkspace": false,
+  "defaultRoot": "/home/user/.openclaw/workspace",
+  "workspaces": [
+    {
+      "index": 0,
+      "root": "/home/user/.openclaw/workspace",
+      "name": "workspace"
+    }
+  ]
+}
+```
 
 ### `GET /api/files/tree`
 
 Returns the workspace directory tree. Excludes `node_modules`, `.git`, `dist`, `server-dist`, and other build artifacts.
+
+**Query Parameters:**
+- `root` (optional, string): Absolute path of workspace root to list (must be an allowed workspace root)
+- `path` (optional, string): Subdirectory path relative to the workspace root
+- `depth` (optional, number): Tree depth (default: 1, max: 5)
 
 **Response:**
 ```json

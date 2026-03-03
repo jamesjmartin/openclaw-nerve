@@ -25,6 +25,7 @@ describe('file-browser routes', () => {
       config: {
         auth: false, port: 3000, host: '127.0.0.1', sslPort: 3443,
         memoryPath: path.join(tmpDir, 'MEMORY.md'),
+        fileBrowserPaths: '',
       },
       SESSION_COOKIE_NAME: 'nerve_session_3000',
     }));
@@ -52,11 +53,10 @@ describe('file-browser routes', () => {
       expect(names).toContain('subdir');
     });
 
-    it('returns 400 for non-existent subdirectory', async () => {
-      // resolveWorkspacePath returns null for non-existent paths, so route returns 400
+    it('returns 404 for non-existent subdirectory', async () => {
       const app = await buildApp();
       const res = await app.request('/api/files/tree?path=nonexistent');
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(404);
     });
 
     it('rejects path traversal attempts', async () => {
@@ -364,6 +364,87 @@ describe('file-browser routes', () => {
       });
 
       expect(restoreRes.status).toBe(409);
+    });
+  });
+
+  describe('GET /api/files/workspace-info', () => {
+    it('returns default workspace info when no custom paths', async () => {
+      const app = await buildApp();
+      const res = await app.request('/api/files/workspace-info');
+      expect(res.status).toBe(200);
+      const json = (await res.json()) as { ok: boolean; isCustomWorkspace: boolean; workspaces: Array<{ root: string }> };
+      expect(json.ok).toBe(true);
+      expect(json.isCustomWorkspace).toBe(false);
+      expect(json.workspaces).toHaveLength(1);
+      expect(json.workspaces[0].root).toBe(tmpDir);
+    });
+  });
+
+  describe('GET /api/files/tree with root param', () => {
+    it('rejects invalid workspace root', async () => {
+      const app = await buildApp();
+      const res = await app.request('/api/files/tree?root=/not/allowed');
+      expect(res.status).toBe(400);
+    });
+  });
+
+  describe('custom workspace permanent deletion', () => {
+    let customDir: string;
+
+    async function buildCustomApp() {
+      customDir = await fs.mkdtemp(path.join(os.tmpdir(), 'fbrowser-custom-'));
+      await fs.writeFile(path.join(customDir, 'custom.md'), 'custom content');
+
+      vi.doMock('../lib/config.js', () => ({
+        config: {
+          auth: false, port: 3000, host: '127.0.0.1', sslPort: 3443,
+          memoryPath: path.join(tmpDir, 'MEMORY.md'),
+          fileBrowserPaths: customDir,
+        },
+        SESSION_COOKIE_NAME: 'nerve_session_3000',
+      }));
+
+      const mod = await import('./file-browser.js');
+      const app = new Hono();
+      app.route('/', mod.default);
+      return app;
+    }
+
+    afterEach(async () => {
+      if (customDir) {
+        await fs.rm(customDir, { recursive: true, force: true }).catch(() => {});
+      }
+    });
+
+    it('permanently deletes files when custom workspace is configured', async () => {
+      const app = await buildCustomApp();
+      const absPath = path.join(customDir, 'custom.md');
+
+      // Trash should do permanent delete for custom workspaces
+      const res = await app.request('/api/files/trash', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: absPath }),
+      });
+
+      expect(res.status).toBe(200);
+      const json = (await res.json()) as { ok: boolean; from: string; to: string };
+      expect(json.ok).toBe(true);
+      expect(json.from).toBe('custom.md');
+      expect(json.to).toBe(''); // permanent delete returns empty 'to'
+
+      // Verify file is actually gone
+      await expect(fs.access(absPath)).rejects.toThrow();
+    });
+
+    it('workspace-info reports custom workspace', async () => {
+      const app = await buildCustomApp();
+      const res = await app.request('/api/files/workspace-info');
+      expect(res.status).toBe(200);
+      const json = (await res.json()) as { ok: boolean; isCustomWorkspace: boolean; workspaces: Array<{ root: string }> };
+      expect(json.ok).toBe(true);
+      expect(json.isCustomWorkspace).toBe(true);
+      expect(json.workspaces.some(w => w.root === customDir)).toBe(true);
     });
   });
 

@@ -11,6 +11,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import {
   getWorkspaceRoot,
+  findWorkspaceRootForPath,
   isExcluded,
   resolveWorkspacePath,
 } from './file-utils.js';
@@ -67,7 +68,8 @@ function workspaceRoot(): string {
 }
 
 function toWorkspaceRelative(absPath: string): string {
-  const rel = path.relative(workspaceRoot(), absPath);
+  const root = findWorkspaceRootForPath(absPath) ?? workspaceRoot();
+  const rel = path.relative(root, absPath);
   return toPosix(rel || '.');
 }
 
@@ -413,6 +415,25 @@ export async function trashEntry(params: { path: string }): Promise<FileOpResult
     await writeTrashIndex(index);
 
     return { from: sourceRel, to: targetRel, undoTtlMs: TRASH_UNDO_TTL_MS };
+  });
+}
+
+export async function deleteEntry(params: { path: string }): Promise<FileOpResult> {
+  return withFileOpsLock(async () => {
+    const sourceAbs = await resolveExistingPathOrThrow(params.path);
+    const sourceRel = toWorkspaceRelative(sourceAbs);
+
+    assertNotProtected(sourceRel);
+
+    const sourceStat = await statOrThrow(sourceAbs);
+
+    if (sourceStat.isDirectory()) {
+      await fs.rm(sourceAbs, { recursive: true, force: true });
+    } else {
+      await fs.unlink(sourceAbs);
+    }
+
+    return { from: sourceRel, to: '' };
   });
 }
 
