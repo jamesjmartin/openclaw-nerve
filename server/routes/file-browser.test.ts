@@ -388,6 +388,14 @@ describe('file-browser routes', () => {
       expect(res.status).toBe(200);
       expect(res.headers.get('Content-Type')).toBe('image/png');
     });
+
+    it('accepts workspace query parameter', async () => {
+      await fs.writeFile(path.join(tmpDir, 'workspace.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+      const app = await buildApp();
+      const res = await app.request('/api/files/raw?path=workspace.png&workspace=0');
+      expect(res.status).toBe(200);
+      expect(res.headers.get('Content-Type')).toBe('image/png');
+    });
   });
 
   describe('GET /api/files/workspace-info', () => {

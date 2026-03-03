@@ -1159,6 +1159,29 @@ Write file contents with optimistic concurrency via mtime comparison. If the fil
 | 400 | Missing fields or path traversal |
 | 409 | File modified since last read (mtime mismatch) |
 
+### `GET /api/files/raw`
+
+Serve raw file content for supported file types. Used for image previews and file downloads.
+
+**Query Parameters:**
+
+| Param | Description |
+|-------|-------------|
+| `path` | Relative path within the workspace |
+| `workspace` (optional, number) | Workspace index (default: 0) |
+
+**Response:** Raw file binary with appropriate `Content-Type` header.
+
+**Errors:**
+
+| Status | Condition |
+|--------|-----------|
+| 400 | Missing `path` parameter |
+| 403 | Invalid or excluded path |
+| 415 | Unsupported file type |
+| 413 | File too large (max 10MB) |
+| 500 | Read failure |
+
 ---
 
 ## File Serving

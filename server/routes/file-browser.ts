@@ -413,11 +413,12 @@ export function isImage(name: string): boolean {
 
 app.get('/api/files/raw', async (c) => {
   const filePath = c.req.query('path');
+  const workspaceIndex = Number(c.req.query('workspace') || '0');
   if (!filePath) {
     return c.json({ ok: false, error: 'Missing path parameter' }, 400);
   }
 
-  const resolved = await resolveWorkspacePath(filePath);
+  const resolved = await resolveWorkspacePath(filePath, { workspaceIndex });
   if (!resolved) {
     return c.json({ ok: false, error: 'Invalid or excluded path' }, 403);
   }
