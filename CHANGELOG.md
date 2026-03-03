@@ -39,6 +39,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Edge TTS voice now auto-switches on language change and validates language-compatible voice overrides to prevent language/voice mismatch (PR #78)
 - English custom `en-*` Edge voice overrides are preserved during auto-reconcile; server-side English override detection is now gender-aware (PR #78)
 - Local Whisper model management now cancels stale model downloads and syncs active server model state on startup (PR #79)
+- File browser no longer overwrites dirty editor content when re-opening an already-open file (PR #85)
+- Infinite scroll no longer stalls after loading older messages (PR #86)
+- `groupToolMessages` and `mergeFinalMessages` no longer mutate shared React state objects (PR #86)
+- Chat message sends use atomic state updates to prevent race conditions with streaming events (PR #86)
+- Stale WebSocket `onclose` handlers no longer kill active connections during reconnect (PR #87)
+- TTS voice flag resets on session switch, preventing phantom auto-speak in new sessions (PR #88)
+- TTS config fetch/save now checks response status before parsing JSON (PR #88)
+- TTS audio fetch includes credentials for cookie-based auth (PR #88)
+- Voice phrase editor uses stable keys instead of array indices, fixing stale input values on delete (PR #88)
+- ConfirmDialog Enter key no longer fires confirm when Cancel is focused (PR #89)
+- Dockerfile and Makefile syntax highlighting works correctly in the file browser (PR #89)
+- Theme switch no longer reloads the highlight.js stylesheet redundantly (PR #89)
+- Updater rollback now completes before releasing the lock (PR #90)
+- `.env` parser strips surrounding quotes from values (PR #90)
+- Image compression rejects oversized output instead of silently exceeding the WebSocket payload limit (PR #90)
+- Kanban drag-and-drop no longer crashes if a task is deleted by a concurrent refresh (PR #90)
+- Duplicate task execution is rejected with 409 instead of spawning a second agent session (PR #90)
 
 ---
 
