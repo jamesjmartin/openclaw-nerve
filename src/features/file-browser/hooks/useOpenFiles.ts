@@ -88,7 +88,7 @@ export function useOpenFiles(workspaceIndex = 0) {
     if (files.length > 0) {
       setOpenFiles(files);
     }
-  }, []);
+  }, [workspaceIndex]);
 
   const setActiveTab = useCallback((tab: string) => {
     setActiveTabState(tab);
@@ -171,7 +171,7 @@ export function useOpenFiles(workspaceIndex = 0) {
         ),
       );
     }
-  }, [setActiveTab]);
+  }, [setActiveTab, workspaceIndex]);
 
   const closeFile = useCallback((filePath: string) => {
     setOpenFiles((prev) => {
@@ -286,7 +286,7 @@ export function useOpenFiles(workspaceIndex = 0) {
         ),
       );
     } catch { /* ignore */ }
-  }, []);
+  }, [workspaceIndex]);
 
   /**
    * Handle an external file change event (from SSE `file.changed`).
