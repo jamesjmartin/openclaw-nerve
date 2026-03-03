@@ -227,10 +227,13 @@ export function useOpenFiles(workspaceIndex = 0) {
     const file = openFilesRef.current.find(f => f.workspaceIndex === workspaceIndex && f.path === filePath);
     if (!file) return { ok: false };
 
+    // Use workspace-scoped key for dedup/lock bookkeeping
+    const fileKey = makeFileKey(workspaceIndex, filePath);
+
     try {
       // Mark as saving BEFORE the request — prevents the SSE bounce-back
       // from triggering the lock overlay while we wait for the response
-      savingPaths.current.add(filePath);
+      savingPaths.current.add(fileKey);
 
       const res = await fetch('/api/files/write', {
         method: 'PUT',
@@ -246,8 +249,8 @@ export function useOpenFiles(workspaceIndex = 0) {
 
       if (data.ok) {
         // Track this mtime so we ignore the SSE bounce-back from our own save
-        recentSaveMtimes.current.set(filePath, data.mtime);
-        setTimeout(() => recentSaveMtimes.current.delete(filePath), 2000);
+        recentSaveMtimes.current.set(fileKey, data.mtime);
+        setTimeout(() => recentSaveMtimes.current.delete(fileKey), 2000);
 
         setOpenFiles((prev) =>
           prev.map((f) =>
@@ -256,7 +259,7 @@ export function useOpenFiles(workspaceIndex = 0) {
               : f,
           ),
         );
-        savingPaths.current.delete(filePath);
+        savingPaths.current.delete(fileKey);
         return { ok: true };
       }
 
@@ -265,10 +268,10 @@ export function useOpenFiles(workspaceIndex = 0) {
         return { ok: false, conflict: true };
       }
 
-      savingPaths.current.delete(filePath);
+      savingPaths.current.delete(fileKey);
       return { ok: false };
     } catch {
-      savingPaths.current.delete(filePath);
+      savingPaths.current.delete(fileKey);
       return { ok: false };
     }
   }, [workspaceIndex]);
@@ -332,8 +335,9 @@ export function useOpenFiles(workspaceIndex = 0) {
 
   const handleFileChanged = useCallback((changedPath: string) => {
     // Ignore bounce-back from our own saves
-    if (recentSaveMtimes.current.has(changedPath)) return;
-    if (savingPaths.current.has(changedPath)) return;
+    const fileKey = makeFileKey(workspaceIndex, changedPath);
+    if (recentSaveMtimes.current.has(fileKey)) return;
+    if (savingPaths.current.has(fileKey)) return;
 
     // Check if file is open (use ref to avoid stale closure)
     const isOpen = openFilesRef.current.some(f => f.workspaceIndex === workspaceIndex && f.path === changedPath);
@@ -349,19 +353,19 @@ export function useOpenFiles(workspaceIndex = 0) {
     // Reload content from disk
     reloadFile(changedPath).then(() => {
       // Clear any existing unlock timer (debounce rapid sequential edits)
-      const existing = unlockTimers.current.get(changedPath);
+      const existing = unlockTimers.current.get(fileKey);
       if (existing) clearTimeout(existing);
 
       // Unlock after 5s of no further changes — gives slow models time
       const timer = window.setTimeout(() => {
-        unlockTimers.current.delete(changedPath);
+        unlockTimers.current.delete(fileKey);
         setOpenFiles((prev) =>
           prev.map(f =>
             f.workspaceIndex === workspaceIndex && f.path === changedPath ? { ...f, locked: false } : f,
           ),
         );
       }, 5000);
-      unlockTimers.current.set(changedPath, timer);
+      unlockTimers.current.set(fileKey, timer);
     });
   }, [reloadFile, workspaceIndex]);
 
