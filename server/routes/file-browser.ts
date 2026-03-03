@@ -234,14 +234,18 @@ app.get('/api/files/read', async (c) => {
 // ── PUT /api/files/write ─────────────────────────────────────────────
 
 app.put('/api/files/write', async (c) => {
-  let body: { path?: string; content?: string; mtime?: number; workspaceIndex?: number };
+  let body: { path?: string; content?: string; mtime?: number; workspaceIndex?: unknown };
   try {
     body = await c.req.json();
   } catch {
     return c.json({ ok: false, error: 'Invalid JSON body' }, 400);
   }
 
-  const { path: filePath, content, mtime, workspaceIndex = 0 } = body;
+  const { path: filePath, content, mtime } = body;
+  const workspaceIndex = parseWorkspaceIndexFromBody(body.workspaceIndex);
+  if (workspaceIndex == null) {
+    return c.json({ ok: false, error: 'Invalid workspaceIndex' }, 400);
+  }
 
   if (!filePath || typeof filePath !== 'string') {
     return c.json({ ok: false, error: 'Missing path' }, 400);
@@ -351,7 +355,7 @@ app.post('/api/files/move', async (c) => {
 // ── POST /api/files/trash ─────────────────────────────────────────────
 
 app.post('/api/files/trash', async (c) => {
-  let body: { path?: string; workspaceIndex?: number };
+  let body: { path?: string; workspaceIndex?: unknown };
   try {
     body = await c.req.json();
   } catch {
@@ -362,7 +366,10 @@ app.post('/api/files/trash', async (c) => {
     return c.json({ ok: false, error: 'Missing path' }, 400);
   }
 
-  const workspaceIndex = body.workspaceIndex ?? 0;
+  const workspaceIndex = parseWorkspaceIndexFromBody(body.workspaceIndex);
+  if (workspaceIndex == null) {
+    return c.json({ ok: false, error: 'Invalid workspaceIndex' }, 400);
+  }
 
   try {
     // Check if using custom workspace - use permanent delete
@@ -405,16 +412,24 @@ app.post('/api/files/restore', async (c) => {
 
 const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.avif', '.svg', '.ico']);
 
-const MIME_TYPES: Record<string, string> = {
+const IMAGE_MIME_TYPES: Record<string, string> = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
   '.gif': 'image/gif',
   '.webp': 'image/webp',
-  '.avif': 'image/avif',
   '.svg': 'image/svg+xml',
+  '.avif': 'image/avif',
+  '.bmp': 'image/bmp',
+  '.tiff': 'image/tiff',
   '.ico': 'image/x-icon',
 };
+
+function parseWorkspaceIndexFromBody(value: unknown): number | null {
+  if (value == null) return 0;
+  if (typeof value === 'number' && Number.isInteger(value) && value >= 0) return value;
+  return null;
+}
 
 /** Check if a file is a supported image. */
 export function isImage(name: string): boolean {
@@ -438,7 +453,7 @@ app.get('/api/files/raw', async (c) => {
   }
 
   const ext = path.extname(resolved).toLowerCase();
-  const mime = MIME_TYPES[ext];
+  const mime = IMAGE_MIME_TYPES[ext];
   if (!mime) {
     return c.json({ ok: false, error: 'Unsupported file type' }, 415);
   }

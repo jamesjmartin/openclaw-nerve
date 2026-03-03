@@ -295,7 +295,7 @@ export function FileTreePanel({
     try {
       // Dragging onto .trash behaves like explicit trash action.
       if (targetDirPath === '.trash' && !sourcePath.startsWith('.trash/')) {
-        const result = await postFileOp<FileOpResult>('/api/files/trash', { path: sourcePath });
+        const result = await postFileOp<FileOpResult>('/api/files/trash', { path: sourcePath, workspaceIndex: activeWorkspace });
         onCloseOpenPaths?.(result.from);
         refresh();
         showToast(
@@ -322,7 +322,7 @@ export function FileTreePanel({
       const message = err instanceof Error ? err.message : 'Move failed';
       showToast({ type: 'error', message }, 4500);
     }
-  }, [onCloseOpenPaths, onRemapOpenPaths, postFileOp, refresh, selectFile, showToast]);
+  }, [activeWorkspace, onCloseOpenPaths, onRemapOpenPaths, postFileOp, refresh, selectFile, showToast]);
 
   const canDropToTarget = useCallback((source: TreeEntry, targetDirPath: string): boolean => {
     if (source.path === '.trash') return false;
@@ -401,7 +401,7 @@ export function FileTreePanel({
   }
 
   try {
-    const result = await postFileOp<FileOpResult>('/api/files/trash', { path: entry.path });
+    const result = await postFileOp<FileOpResult>('/api/files/trash', { path: entry.path, workspaceIndex: activeWorkspace });
     onCloseOpenPaths?.(result.from);
     refresh();
     
@@ -423,7 +423,7 @@ export function FileTreePanel({
     const message = err instanceof Error ? err.message : 'Delete operation failed';
     showToast({ type: 'error', message }, 4500);
   }
-}, [onCloseOpenPaths, postFileOp, refresh, showToast]);
+}, [activeWorkspace, onCloseOpenPaths, postFileOp, refresh, showToast]);
 
   const restoreEntry = useCallback(async (entryPath: string) => {
     try {

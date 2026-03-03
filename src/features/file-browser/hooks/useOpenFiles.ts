@@ -6,10 +6,18 @@ const STORAGE_KEY_FILES = 'nerve-open-files';
 const STORAGE_KEY_TAB = 'nerve-active-tab';
 const MAX_OPEN_TABS = 20;
 
-function loadPersistedFiles(): string[] {
+function loadPersistedFiles(): Array<{ workspaceIndex: number; path: string }> {
   try {
     const stored = localStorage.getItem(STORAGE_KEY_FILES);
-    return stored ? JSON.parse(stored) : [];
+    if (!stored) return [];
+    const keys = JSON.parse(stored) as string[];
+    return keys.map(key => {
+      const [wsIndex, ...pathParts] = key.split(':');
+      return {
+        workspaceIndex: Number.parseInt(wsIndex, 10) || 0,
+        path: pathParts.join(':'), // Rejoin in case path contains ':'
+      };
+    });
   } catch { return []; }
 }
 
@@ -21,7 +29,7 @@ function loadPersistedTab(): string {
 
 function persistFiles(files: OpenFile[]) {
   try {
-    localStorage.setItem(STORAGE_KEY_FILES, JSON.stringify(files.map(f => f.path)));
+    localStorage.setItem(STORAGE_KEY_FILES, JSON.stringify(files.map(f => makeFileKey(f.workspaceIndex, f.path))));
   } catch { /* ignore */ }
 }
 
@@ -45,6 +53,10 @@ function remapPathPrefix(candidatePath: string, fromPrefix: string, toPrefix: st
   return `${toPrefix}${candidatePath.slice(fromPrefix.length)}`;
 }
 
+function makeFileKey(workspaceIndex: number, path: string): string {
+  return `${workspaceIndex}:${path}`;
+}
+
 export function useOpenFiles(workspaceIndex = 0) {
   const [openFiles, setOpenFiles] = useState<OpenFile[]>([]);
   const [activeTab, setActiveTabState] = useState<string>(loadPersistedTab);
@@ -60,25 +72,30 @@ export function useOpenFiles(workspaceIndex = 0) {
     if (initializedRef.current) return;
     initializedRef.current = true;
 
-    const paths = loadPersistedFiles();
-    if (paths.length === 0) return;
+    const fileEntries = loadPersistedFiles();
+    if (fileEntries.length === 0) return;
+
+    // Only load files for the current workspace
+    const workspaceFiles = fileEntries.filter(entry => entry.workspaceIndex === workspaceIndex);
+    if (workspaceFiles.length === 0) return;
 
     const files: OpenFile[] = [];
-    for (const p of paths) {
+    for (const entry of workspaceFiles) {
       try {
-        const res = await fetch(`/api/files/read?workspaceIndex=${workspaceIndex}&path=${encodeURIComponent(p)}`);
+        const res = await fetch(`/api/files/read?workspaceIndex=${entry.workspaceIndex}&path=${encodeURIComponent(entry.path)}`);
         if (!res.ok) continue;
         const data = await res.json();
         if (!data.ok) continue;
         files.push({
-          path: p,
-          name: basename(p),
+          path: entry.path,
+          name: basename(entry.path),
           content: data.content,
           savedContent: data.content,
           dirty: false,
           locked: false,
           mtime: data.mtime,
           loading: false,
+          workspaceIndex: entry.workspaceIndex,
         });
       } catch {
         // Skip files that can't be loaded
@@ -97,8 +114,9 @@ export function useOpenFiles(workspaceIndex = 0) {
 
   const openFile = useCallback(async (filePath: string) => {
     // If already open, just switch tab
+    const fileKey = makeFileKey(workspaceIndex, filePath);
     setOpenFiles((prev) => {
-      const existing = prev.find(f => f.path === filePath);
+      const existing = prev.find(f => f.workspaceIndex === workspaceIndex && f.path === filePath);
       if (existing) return prev;
 
       // Enforce tab limit — close oldest non-dirty tab to make room
@@ -106,7 +124,7 @@ export function useOpenFiles(workspaceIndex = 0) {
       if (base.length >= MAX_OPEN_TABS) {
         const oldest = base.find(f => !f.dirty);
         if (oldest) {
-          base = base.filter(f => f.path !== oldest.path);
+          base = base.filter(f => !(f.workspaceIndex === oldest.workspaceIndex && f.path === oldest.path));
         } else {
           // All dirty — close oldest anyway
           base = base.slice(1);
@@ -123,19 +141,20 @@ export function useOpenFiles(workspaceIndex = 0) {
         locked: false,
         mtime: 0,
         loading: true,
+        workspaceIndex,
       };
       const next = [...base, newFile];
       persistFiles(next);
       return next;
     });
 
-    setActiveTab(filePath);
+    setActiveTab(fileKey);
 
     // Images don't need content — just mark as loaded
     if (isImageFile(basename(filePath))) {
       setOpenFiles((prev) =>
         prev.map((f) =>
-          f.path === filePath ? { ...f, loading: false } : f,
+          f.workspaceIndex === workspaceIndex && f.path === filePath ? { ...f, loading: false } : f,
         ),
       );
       return;
@@ -148,7 +167,7 @@ export function useOpenFiles(workspaceIndex = 0) {
 
       setOpenFiles((prev) =>
         prev.map((f) => {
-          if (f.path !== filePath) return f;
+          if (f.workspaceIndex !== workspaceIndex || f.path !== filePath) return f;
           if (!data.ok) {
             return { ...f, loading: false, error: data.error || 'Failed to load' };
           }
@@ -165,7 +184,7 @@ export function useOpenFiles(workspaceIndex = 0) {
     } catch {
       setOpenFiles((prev) =>
         prev.map((f) =>
-          f.path === filePath
+          f.workspaceIndex === workspaceIndex && f.path === filePath
             ? { ...f, loading: false, error: 'Network error' }
             : f,
         ),
@@ -174,36 +193,37 @@ export function useOpenFiles(workspaceIndex = 0) {
   }, [setActiveTab, workspaceIndex]);
 
   const closeFile = useCallback((filePath: string) => {
+    const fileKey = makeFileKey(workspaceIndex, filePath);
     setOpenFiles((prev) => {
-      const next = prev.filter(f => f.path !== filePath);
+      const next = prev.filter(f => !(f.workspaceIndex === workspaceIndex && f.path === filePath));
       persistFiles(next);
       return next;
     });
 
     // If closing the active tab, switch to chat or previous tab
     setActiveTabState((currentTab) => {
-      if (currentTab !== filePath) return currentTab;
+      if (currentTab !== fileKey) return currentTab;
       const tab = 'chat';
       persistTab(tab);
       return tab;
     });
-  }, []);
+  }, [workspaceIndex]);
 
   const updateContent = useCallback((filePath: string, content: string) => {
     setOpenFiles((prev) =>
       prev.map((f) => {
-        if (f.path !== filePath) return f;
+        if (f.workspaceIndex !== workspaceIndex || f.path !== filePath) return f;
         return { ...f, content, dirty: content !== f.savedContent };
       }),
     );
-  }, []);
+  }, [workspaceIndex]);
 
   // Ref to always have current openFiles for saveFile (avoids stale closure)
   const openFilesRef = useRef(openFiles);
   useEffect(() => { openFilesRef.current = openFiles; });
 
   const saveFile = useCallback(async (filePath: string): Promise<{ ok: boolean; conflict?: boolean }> => {
-    const file = openFilesRef.current.find(f => f.path === filePath);
+    const file = openFilesRef.current.find(f => f.workspaceIndex === workspaceIndex && f.path === filePath);
     if (!file) return { ok: false };
 
     try {
@@ -217,7 +237,8 @@ export function useOpenFiles(workspaceIndex = 0) {
         body: JSON.stringify({
           path: filePath,
           content: file.content,
-          expectedMtime: file.mtime,
+          mtime: file.mtime,
+          workspaceIndex,
         }),
       });
       const data = await res.json();
@@ -229,7 +250,7 @@ export function useOpenFiles(workspaceIndex = 0) {
 
         setOpenFiles((prev) =>
           prev.map((f) =>
-            f.path === filePath
+            f.workspaceIndex === workspaceIndex && f.path === filePath
               ? { ...f, savedContent: f.content, dirty: false, mtime: data.mtime }
               : f,
           ),
@@ -249,7 +270,7 @@ export function useOpenFiles(workspaceIndex = 0) {
       savingPaths.current.delete(filePath);
       return { ok: false };
     }
-  }, []);
+  }, [workspaceIndex]);
 
   const reloadFile = useCallback(async (filePath: string) => {
     try {
@@ -261,7 +282,7 @@ export function useOpenFiles(workspaceIndex = 0) {
         if (res.status === 404) {
           setOpenFiles((prev) =>
             prev.map((f) =>
-              f.path === filePath
+              f.workspaceIndex === workspaceIndex && f.path === filePath
                 ? { ...f, error: 'File was deleted', locked: false, loading: false }
                 : f,
             ),
@@ -272,7 +293,7 @@ export function useOpenFiles(workspaceIndex = 0) {
 
       setOpenFiles((prev) =>
         prev.map((f) =>
-          f.path === filePath
+          f.workspaceIndex === workspaceIndex && f.path === filePath
             ? {
                 ...f,
                 content: data.content,
@@ -314,13 +335,13 @@ export function useOpenFiles(workspaceIndex = 0) {
     if (savingPaths.current.has(changedPath)) return;
 
     // Check if file is open (use ref to avoid stale closure)
-    const isOpen = openFilesRef.current.some(f => f.path === changedPath);
+    const isOpen = openFilesRef.current.some(f => f.workspaceIndex === workspaceIndex && f.path === changedPath);
     if (!isOpen) return;
 
     // Lock the file immediately
     setOpenFiles((prev) =>
       prev.map(f =>
-        f.path === changedPath ? { ...f, locked: true } : f,
+        f.workspaceIndex === workspaceIndex && f.path === changedPath ? { ...f, locked: true } : f,
       ),
     );
 
@@ -335,13 +356,13 @@ export function useOpenFiles(workspaceIndex = 0) {
         unlockTimers.current.delete(changedPath);
         setOpenFiles((prev) =>
           prev.map(f =>
-            f.path === changedPath ? { ...f, locked: false } : f,
+            f.workspaceIndex === workspaceIndex && f.path === changedPath ? { ...f, locked: false } : f,
           ),
         );
       }, 5000);
       unlockTimers.current.set(changedPath, timer);
     });
-  }, [reloadFile]);
+  }, [reloadFile, workspaceIndex]);
 
   /**
    * Remap open editor tabs when a file/folder path changes.

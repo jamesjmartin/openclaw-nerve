@@ -29,4 +29,6 @@ export interface OpenFile {
   loading: boolean;
   /** Error message if fetch failed. */
   error?: string;
+  /** Workspace index (for multi-workspace support). */
+  workspaceIndex: number;
 }
