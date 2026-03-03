@@ -12,11 +12,12 @@ function loadPersistedFiles(): Array<{ workspaceIndex: number; path: string }> {
     if (!stored) return [];
     const keys = JSON.parse(stored) as string[];
     return keys.map(key => {
-      const [wsIndex, ...pathParts] = key.split(':');
-      return {
-        workspaceIndex: Number.parseInt(wsIndex, 10) || 0,
-        path: pathParts.join(':'), // Rejoin in case path contains ':'
-      };
+      const colonIndex = key.indexOf(':');
+      // Old format: plain path without workspace prefix — treat as workspace 0
+      if (colonIndex === -1) return { workspaceIndex: 0, path: key };
+      const wsIndex = Number.parseInt(key.slice(0, colonIndex), 10);
+      if (Number.isNaN(wsIndex)) return { workspaceIndex: 0, path: key };
+      return { workspaceIndex: wsIndex, path: key.slice(colonIndex + 1) };
     });
   } catch { return []; }
 }

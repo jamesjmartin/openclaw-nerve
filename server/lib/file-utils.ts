@@ -72,11 +72,8 @@ export function getWorkspaceRoot(workspaceIndex = 0): string {
 
 /** Check if the current workspace is using a custom path from NERVE_WORKSPACE_PATHS */
 export function isCustomWorkspace(): boolean {
-  if (config.fileBrowserPaths) {
-    const paths = config.fileBrowserPaths.split(',').map(p => p.trim()).filter(p => p.length > 0);
-    return paths.length > 0;
-  }
-  return false;
+  if (!config.fileBrowserPaths) return false;
+  return config.fileBrowserPaths.split(',').some(p => p.trim().length > 0);
 }
 
 // ── Path validation ──────────────────────────────────────────────────

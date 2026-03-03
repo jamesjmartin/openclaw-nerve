@@ -90,7 +90,7 @@ export function FileTreePanel({
   // State for workspaces
   const [workspaces, setWorkspaces] = useState<WorkspaceInfo[]>([]);
   const [internalActiveWorkspace, setInternalActiveWorkspace] = useState(0);
-  
+
   // Use external workspace state if provided, otherwise use internal
   const activeWorkspace = externalActiveWorkspace ?? internalActiveWorkspace;
   const setActiveWorkspace = onWorkspaceChange ?? setInternalActiveWorkspace;
@@ -395,35 +395,35 @@ export function FileTreePanel({
   }, [cancelRename, onRemapOpenPaths, postFileOp, refresh, renameTargetPath, renameValue, selectFile, showToast]);
 
   const moveToTrash = useCallback(async (entry: TreeEntry) => {
-  if (entry.path === '.trash' || entry.path.startsWith('.trash/')) {
-    showToast({ type: 'error', message: 'Item is already in Trash' }, 3000);
-    return;
-  }
-
-  try {
-    const result = await postFileOp<FileOpResult>('/api/files/trash', { path: entry.path, workspaceIndex: activeWorkspace });
-    onCloseOpenPaths?.(result.from);
-    refresh();
-    
-    // Check if it was permanent delete (empty 'to' path)
-    if (result.to === '') {
-      showToast({ type: 'success', message: `Permanently deleted ${basename(result.from)}` }, 3000);
-    } else {
-      showToast(
-        {
-          type: 'undo',
-          message: `Moved ${basename(result.from)} to Trash`,
-          trashPath: result.to,
-          ttlMs: result.undoTtlMs ?? UNDO_TOAST_TTL_MS,
-        },
-        result.undoTtlMs ?? UNDO_TOAST_TTL_MS,
-      );
+    if (entry.path === '.trash' || entry.path.startsWith('.trash/')) {
+      showToast({ type: 'error', message: 'Item is already in Trash' }, 3000);
+      return;
     }
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Delete operation failed';
-    showToast({ type: 'error', message }, 4500);
-  }
-}, [activeWorkspace, onCloseOpenPaths, postFileOp, refresh, showToast]);
+
+    try {
+      const result = await postFileOp<FileOpResult>('/api/files/trash', { path: entry.path, workspaceIndex: activeWorkspace });
+      onCloseOpenPaths?.(result.from);
+      refresh();
+
+      // Check if it was permanent delete (empty 'to' path)
+      if (result.to === '') {
+        showToast({ type: 'success', message: `Permanently deleted ${basename(result.from)}` }, 3000);
+      } else {
+        showToast(
+          {
+            type: 'undo',
+            message: `Moved ${basename(result.from)} to Trash`,
+            trashPath: result.to,
+            ttlMs: result.undoTtlMs ?? UNDO_TOAST_TTL_MS,
+          },
+          result.undoTtlMs ?? UNDO_TOAST_TTL_MS,
+        );
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Delete operation failed';
+      showToast({ type: 'error', message }, 4500);
+    }
+  }, [activeWorkspace, onCloseOpenPaths, postFileOp, refresh, showToast]);
 
   const restoreEntry = useCallback(async (entryPath: string) => {
     try {
@@ -678,9 +678,9 @@ export function FileTreePanel({
           {showTrashAction && (
             <button
               className="w-full px-3 py-1.5 text-left text-xs text-destructive hover:bg-destructive/10 flex items-center gap-2"
-              onClick={() => { 
-                setConfirmDelete(menuEntry); 
-                setContextMenu(null); 
+              onClick={() => {
+                setConfirmDelete(menuEntry);
+                setContextMenu(null);
               }}
             >
               <Trash2 size={12} />
@@ -734,7 +734,7 @@ export function FileTreePanel({
       <ConfirmDialog
         open={confirmDelete !== null}
         title={isCustomWorkspace ? 'Permanently Delete' : 'Move to Trash'}
-        message={isCustomWorkspace 
+        message={isCustomWorkspace
           ? `This will permanently delete "${confirmDelete?.name || 'this item'}" and cannot be undone. Continue?`
           : `Move "${confirmDelete?.name || 'this item'}" to Trash? You can restore it later.`
         }

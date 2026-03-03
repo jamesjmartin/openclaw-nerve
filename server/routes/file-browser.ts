@@ -116,6 +116,20 @@ async function listDirectory(
   return entries;
 }
 
+/** Parse workspaceIndex from a query string parameter. Returns 0 when absent. */
+function parseWorkspaceIndexFromQuery(raw: string | undefined): number | null {
+  if (raw == null || raw.trim() === '') return 0;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
+}
+
+/** Parse workspaceIndex from a JSON request body value. Returns 0 when absent. */
+function parseWorkspaceIndexFromBody(value: unknown): number | null {
+  if (value == null) return 0;
+  if (typeof value === 'number' && Number.isInteger(value) && value >= 0) return value;
+  return null;
+}
+
 function handleFileOpError(c: Context, err: unknown) {
   if (err instanceof FileOpError) {
     return c.json({ ok: false, error: err.message, code: err.code }, err.status);
@@ -142,9 +156,8 @@ app.get('/api/files/workspace-info', async (c) => {
 // ── GET /api/files/tree ──────────────────────────────────────────────
 
 app.get('/api/files/tree', async (c) => {
-  const workspaceRaw = c.req.query('workspaceIndex');
-  const workspaceIndex = workspaceRaw == null || workspaceRaw.trim() === '' ? 0 : Number.parseInt(workspaceRaw, 10);
-  if (workspaceRaw != null && workspaceRaw.trim() !== '' && !Number.isInteger(workspaceIndex)) {
+  const workspaceIndex = parseWorkspaceIndexFromQuery(c.req.query('workspaceIndex'));
+  if (workspaceIndex == null) {
     return c.json({ ok: false, error: 'Invalid workspaceIndex' }, 400);
   }
   const root = getWorkspaceRoot(workspaceIndex);
@@ -182,9 +195,8 @@ app.get('/api/files/tree', async (c) => {
 
 app.get('/api/files/read', async (c) => {
   const filePath = c.req.query('path');
-  const workspaceRaw = c.req.query('workspaceIndex');
-  const workspaceIndex = workspaceRaw == null || workspaceRaw.trim() === '' ? 0 : Number.parseInt(workspaceRaw, 10);
-  if (workspaceRaw != null && workspaceRaw.trim() !== '' && !Number.isInteger(workspaceIndex)) {
+  const workspaceIndex = parseWorkspaceIndexFromQuery(c.req.query('workspaceIndex'));
+  if (workspaceIndex == null) {
     return c.json({ ok: false, error: 'Invalid workspaceIndex' }, 400);
   }
   
@@ -425,12 +437,6 @@ const IMAGE_MIME_TYPES: Record<string, string> = {
   '.ico': 'image/x-icon',
 };
 
-function parseWorkspaceIndexFromBody(value: unknown): number | null {
-  if (value == null) return 0;
-  if (typeof value === 'number' && Number.isInteger(value) && value >= 0) return value;
-  return null;
-}
-
 /** Check if a file is a supported image. */
 export function isImage(name: string): boolean {
   return IMAGE_EXTENSIONS.has(path.extname(name).toLowerCase());
@@ -438,9 +444,8 @@ export function isImage(name: string): boolean {
 
 app.get('/api/files/raw', async (c) => {
   const filePath = c.req.query('path');
-  const workspaceRaw = c.req.query('workspaceIndex');
-  const workspaceIndex = workspaceRaw == null || workspaceRaw.trim() === '' ? 0 : Number.parseInt(workspaceRaw, 10);
-  if (workspaceRaw != null && workspaceRaw.trim() !== '' && !Number.isInteger(workspaceIndex)) {
+  const workspaceIndex = parseWorkspaceIndexFromQuery(c.req.query('workspaceIndex'));
+  if (workspaceIndex == null) {
     return c.json({ ok: false, error: 'Invalid workspaceIndex' }, 400);
   }
   if (!filePath) {
