@@ -419,8 +419,12 @@ export async function trashEntry(params: { path: string }): Promise<FileOpResult
 export async function deleteEntry(params: { path: string; workspaceIndex?: number }): Promise<FileOpResult> {
   return withFileOpsLock(async () => {
     const workspaceIndex = params.workspaceIndex ?? 0;
-    const sourceAbs = await resolveExistingPathOrThrow(params.path, workspaceIndex);
-    const sourceRel = toWorkspaceRelative(sourceAbs, workspaceIndex);
+    const sourceAbs = await resolveWorkspacePath(params.path, { workspaceIndex });
+    if (!sourceAbs) {
+      throw new FileOpError(403, 'invalid_path', 'Invalid or excluded path');
+    }
+
+    const sourceRel = toPosix(path.relative(getWorkspaceRoot(workspaceIndex), sourceAbs) || '.');
 
     assertNotProtected(sourceRel);
     

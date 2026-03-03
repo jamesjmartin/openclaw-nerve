@@ -77,12 +77,24 @@ describe('file-browser routes', () => {
       expect(names).not.toContain('node_modules');
       expect(names).not.toContain('.git');
     });
+
+    it('returns 400 for invalid workspace index', async () => {
+      const app = await buildApp();
+      const res = await app.request('/api/files/tree?workspace=abc');
+      expect(res.status).toBe(400);
+    });
   });
 
   describe('GET /api/files/read', () => {
     it('returns 400 when path is missing', async () => {
       const app = await buildApp();
       const res = await app.request('/api/files/read');
+      expect(res.status).toBe(400);
+    });
+
+    it('returns 400 for invalid workspace index', async () => {
+      const app = await buildApp();
+      const res = await app.request('/api/files/read?path=test.md&workspace=abc');
       expect(res.status).toBe(400);
     });
 
@@ -371,6 +383,12 @@ describe('file-browser routes', () => {
     it('returns 400 when path is missing', async () => {
       const app = await buildApp();
       const res = await app.request('/api/files/raw');
+      expect(res.status).toBe(400);
+    });
+
+    it('returns 400 for invalid workspace index', async () => {
+      const app = await buildApp();
+      const res = await app.request('/api/files/raw?path=photo.png&workspace=abc');
       expect(res.status).toBe(400);
     });
 

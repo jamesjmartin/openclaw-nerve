@@ -142,7 +142,11 @@ app.get('/api/files/workspace-info', async (c) => {
 // ── GET /api/files/tree ──────────────────────────────────────────────
 
 app.get('/api/files/tree', async (c) => {
-  const workspaceIndex = Number(c.req.query('workspace') || '0');
+  const workspaceRaw = c.req.query('workspace');
+  const workspaceIndex = workspaceRaw == null || workspaceRaw.trim() === '' ? 0 : Number.parseInt(workspaceRaw, 10);
+  if (workspaceRaw != null && workspaceRaw.trim() !== '' && !Number.isInteger(workspaceIndex)) {
+    return c.json({ ok: false, error: 'Invalid workspace' }, 400);
+  }
   const root = getWorkspaceRoot(workspaceIndex);
   const subPath = c.req.query('path') || '';
   const depth = Math.min(Math.max(Number(c.req.query('depth')) || 1, 1), 5);
@@ -178,7 +182,11 @@ app.get('/api/files/tree', async (c) => {
 
 app.get('/api/files/read', async (c) => {
   const filePath = c.req.query('path');
-  const workspaceIndex = Number(c.req.query('workspace') || '0');
+  const workspaceRaw = c.req.query('workspace');
+  const workspaceIndex = workspaceRaw == null || workspaceRaw.trim() === '' ? 0 : Number.parseInt(workspaceRaw, 10);
+  if (workspaceRaw != null && workspaceRaw.trim() !== '' && !Number.isInteger(workspaceIndex)) {
+    return c.json({ ok: false, error: 'Invalid workspace' }, 400);
+  }
   
   if (!filePath) {
     return c.json({ ok: false, error: 'Missing path parameter' }, 400);
@@ -415,7 +423,11 @@ export function isImage(name: string): boolean {
 
 app.get('/api/files/raw', async (c) => {
   const filePath = c.req.query('path');
-  const workspaceIndex = Number(c.req.query('workspace') || '0');
+  const workspaceRaw = c.req.query('workspace');
+  const workspaceIndex = workspaceRaw == null || workspaceRaw.trim() === '' ? 0 : Number.parseInt(workspaceRaw, 10);
+  if (workspaceRaw != null && workspaceRaw.trim() !== '' && !Number.isInteger(workspaceIndex)) {
+    return c.json({ ok: false, error: 'Invalid workspace' }, 400);
+  }
   if (!filePath) {
     return c.json({ ok: false, error: 'Missing path parameter' }, 400);
   }
