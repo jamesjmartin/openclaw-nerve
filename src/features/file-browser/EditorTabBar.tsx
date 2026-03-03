@@ -1,5 +1,6 @@
 import { EditorTab } from './EditorTab';
 import type { OpenFile } from './types';
+import { makeFileKey } from './hooks/useOpenFiles';
 
 interface EditorTabBarProps {
   activeTab: string;
@@ -33,20 +34,23 @@ export function EditorTabBar({
       />
 
       {/* File tabs */}
-      {openFiles.map((file) => (
+      {openFiles.map((file) => {
+        const fileKey = makeFileKey(file.workspaceIndex, file.path);
+        return (
         <EditorTab
-          key={file.path}
-          id={file.path}
+          key={fileKey}
+          id={fileKey}
           label={file.name}
-          active={activeTab === file.path}
+          active={activeTab === fileKey}
           dirty={file.dirty}
           locked={file.locked}
           tooltip={file.path}
-          onSelect={() => onSelectTab(file.path)}
-          onClose={() => onCloseTab(file.path)}
-          onMiddleClick={() => onCloseTab(file.path)}
+          onSelect={() => onSelectTab(fileKey)}
+          onClose={() => onCloseTab(fileKey)}
+          onMiddleClick={() => onCloseTab(fileKey)}
         />
-      ))}
+        );
+      })}
     </div>
   );
 }

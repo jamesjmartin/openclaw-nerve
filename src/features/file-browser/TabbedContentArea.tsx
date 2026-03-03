@@ -12,6 +12,7 @@ import { EditorTabBar } from './EditorTabBar';
 import { ImageViewer } from './ImageViewer';
 import { isImageFile } from './utils/fileTypes';
 import type { OpenFile } from './types';
+import { makeFileKey } from './hooks/useOpenFiles';
 
 // Lazy-load CodeMirror editor — keeps it out of the initial bundle
 const FileEditor = lazy(() => import('./FileEditor'));
@@ -87,13 +88,15 @@ export function TabbedContentArea({
         </div>
 
         {/* File editors — one per open file, only active one visible */}
-        {openFiles.map((file) => (
+        {openFiles.map((file) => {
+          const fileKey = makeFileKey(file.workspaceIndex, file.path);
+          return (
           <div
-            key={file.path}
-            className={activeTab === file.path ? 'h-full' : 'hidden'}
+            key={fileKey}
+            className={activeTab === fileKey ? 'h-full' : 'hidden'}
             role="tabpanel"
-            id={`tabpanel-${file.path}`}
-            aria-labelledby={`tab-${file.path}`}
+            id={`tabpanel-${fileKey}`}
+            aria-labelledby={`tab-${fileKey}`}
           >
             {isImageFile(file.name) ? (
               <ImageViewer file={file} workspaceIndex={workspaceIndex} />
@@ -108,7 +111,8 @@ export function TabbedContentArea({
               </Suspense>
             )}
           </div>
-        ))}
+        );
+        })}
 
         {/* Save conflict toast */}
         {saveToast && (

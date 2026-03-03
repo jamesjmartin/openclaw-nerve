@@ -54,8 +54,16 @@ function remapPathPrefix(candidatePath: string, fromPrefix: string, toPrefix: st
   return `${toPrefix}${candidatePath.slice(fromPrefix.length)}`;
 }
 
-function makeFileKey(workspaceIndex: number, path: string): string {
+export function makeFileKey(workspaceIndex: number, path: string): string {
   return `${workspaceIndex}:${path}`;
+}
+
+export function parseFileKey(fileKey: string): { workspaceIndex: number; path: string } {
+  const colonIndex = fileKey.indexOf(':');
+  if (colonIndex === -1) return { workspaceIndex: 0, path: fileKey };
+  const wsIndex = Number.parseInt(fileKey.slice(0, colonIndex), 10);
+  if (Number.isNaN(wsIndex)) return { workspaceIndex: 0, path: fileKey };
+  return { workspaceIndex: wsIndex, path: fileKey.slice(colonIndex + 1) };
 }
 
 export function useOpenFiles(workspaceIndex = 0) {
@@ -193,10 +201,13 @@ export function useOpenFiles(workspaceIndex = 0) {
     }
   }, [setActiveTab, workspaceIndex]);
 
-  const closeFile = useCallback((filePath: string) => {
-    const fileKey = makeFileKey(workspaceIndex, filePath);
+  const closeFile = useCallback((fileKeyOrPath: string) => {
+    // Parse the input - could be composite key "0:file.ts" or raw path "file.ts"
+    const { workspaceIndex: targetWs, path: targetPath } = parseFileKey(fileKeyOrPath);
+    const fileKey = makeFileKey(targetWs, targetPath);
+    
     setOpenFiles((prev) => {
-      const next = prev.filter(f => !(f.workspaceIndex === workspaceIndex && f.path === filePath));
+      const next = prev.filter(f => !(f.workspaceIndex === targetWs && f.path === targetPath));
       persistFiles(next);
       return next;
     });
@@ -208,7 +219,7 @@ export function useOpenFiles(workspaceIndex = 0) {
       persistTab(tab);
       return tab;
     });
-  }, [workspaceIndex]);
+  }, []);
 
   const updateContent = useCallback((filePath: string, content: string) => {
     setOpenFiles((prev) =>
