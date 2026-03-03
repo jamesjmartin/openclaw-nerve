@@ -90,12 +90,15 @@ export default function App({ onLogout }: AppProps) {
   // Track last changed file path for tree refresh
   const [lastChangedPath, setLastChangedPath] = useState<string | null>(null);
 
+  // Workspace state (shared between FileTreePanel and file operations)
+  const [activeWorkspace, setActiveWorkspace] = useState(0);
+
   // File browser state
   const {
     openFiles, activeTab, setActiveTab,
     openFile, closeFile, updateContent, saveFile, reloadFile, initializeFiles,
     handleFileChanged, remapOpenPaths, closeOpenPathsByPrefix,
-  } = useOpenFiles();
+  } = useOpenFiles(activeWorkspace);
 
   // Save with conflict toast
   const [saveToast, setSaveToast] = useState<{ path: string; type: 'conflict' | 'error' } | null>(null);
@@ -318,6 +321,7 @@ export default function App({ onLogout }: AppProps) {
     <TabbedContentArea
       activeTab={activeTab}
       openFiles={openFiles}
+      workspaceIndex={activeWorkspace}
       onSelectTab={setActiveTab}
       onCloseTab={closeFile}
       onContentChange={updateContent}
@@ -524,6 +528,8 @@ export default function App({ onLogout }: AppProps) {
               lastChangedPath={lastChangedPath}
               onRemapOpenPaths={remapOpenPaths}
               onCloseOpenPaths={closeOpenPathsByPrefix}
+              activeWorkspace={activeWorkspace}
+              onWorkspaceChange={setActiveWorkspace}
             />
           </PanelErrorBoundary>
         )}

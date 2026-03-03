@@ -142,10 +142,10 @@ app.get('/api/files/workspace-info', async (c) => {
 // ── GET /api/files/tree ──────────────────────────────────────────────
 
 app.get('/api/files/tree', async (c) => {
-  const workspaceRaw = c.req.query('workspace');
+  const workspaceRaw = c.req.query('workspaceIndex');
   const workspaceIndex = workspaceRaw == null || workspaceRaw.trim() === '' ? 0 : Number.parseInt(workspaceRaw, 10);
   if (workspaceRaw != null && workspaceRaw.trim() !== '' && !Number.isInteger(workspaceIndex)) {
-    return c.json({ ok: false, error: 'Invalid workspace' }, 400);
+    return c.json({ ok: false, error: 'Invalid workspaceIndex' }, 400);
   }
   const root = getWorkspaceRoot(workspaceIndex);
   const subPath = c.req.query('path') || '';
@@ -182,10 +182,10 @@ app.get('/api/files/tree', async (c) => {
 
 app.get('/api/files/read', async (c) => {
   const filePath = c.req.query('path');
-  const workspaceRaw = c.req.query('workspace');
+  const workspaceRaw = c.req.query('workspaceIndex');
   const workspaceIndex = workspaceRaw == null || workspaceRaw.trim() === '' ? 0 : Number.parseInt(workspaceRaw, 10);
   if (workspaceRaw != null && workspaceRaw.trim() !== '' && !Number.isInteger(workspaceIndex)) {
-    return c.json({ ok: false, error: 'Invalid workspace' }, 400);
+    return c.json({ ok: false, error: 'Invalid workspaceIndex' }, 400);
   }
   
   if (!filePath) {
@@ -423,10 +423,10 @@ export function isImage(name: string): boolean {
 
 app.get('/api/files/raw', async (c) => {
   const filePath = c.req.query('path');
-  const workspaceRaw = c.req.query('workspace');
+  const workspaceRaw = c.req.query('workspaceIndex');
   const workspaceIndex = workspaceRaw == null || workspaceRaw.trim() === '' ? 0 : Number.parseInt(workspaceRaw, 10);
   if (workspaceRaw != null && workspaceRaw.trim() !== '' && !Number.isInteger(workspaceIndex)) {
-    return c.json({ ok: false, error: 'Invalid workspace' }, 400);
+    return c.json({ ok: false, error: 'Invalid workspaceIndex' }, 400);
   }
   if (!filePath) {
     return c.json({ ok: false, error: 'Missing path parameter' }, 400);

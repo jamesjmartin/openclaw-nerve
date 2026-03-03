@@ -57,8 +57,8 @@ export function useFileTree(workspaceIndex = 0) {
   const fetchChildren = useCallback(async (dirPath: string): Promise<TreeEntry[] | null> => {
     try {
       const params = dirPath 
-        ? `?workspace=${workspaceIndex}&path=${encodeURIComponent(dirPath)}&depth=1` 
-        : `?workspace=${workspaceIndex}&depth=1`;
+        ? `?workspaceIndex=${workspaceIndex}&path=${encodeURIComponent(dirPath)}&depth=1` 
+        : `?workspaceIndex=${workspaceIndex}&depth=1`;
       const res = await fetch(`/api/files/tree${params}`);
       if (!res.ok) return null;
       const data = await res.json();

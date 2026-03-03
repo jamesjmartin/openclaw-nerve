@@ -41,6 +41,7 @@ interface TabbedContentAreaProps {
   onReloadFile?: (path: string) => void;
   saveToast?: SaveToast | null;
   onDismissToast?: () => void;
+  workspaceIndex?: number;
   /** The chat panel rendered as-is (never unmounted). */
   chatPanel: ReactNode;
 }
@@ -48,6 +49,7 @@ interface TabbedContentAreaProps {
 export function TabbedContentArea({
   activeTab,
   openFiles,
+  workspaceIndex = 0,
   onSelectTab,
   onCloseTab,
   onContentChange,
@@ -94,7 +96,7 @@ export function TabbedContentArea({
             aria-labelledby={`tab-${file.path}`}
           >
             {isImageFile(file.name) ? (
-              <ImageViewer file={file} />
+              <ImageViewer file={file} workspaceIndex={workspaceIndex} />
             ) : (
               <Suspense fallback={<EditorFallback />}>
                 <FileEditor

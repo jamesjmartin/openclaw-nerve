@@ -45,7 +45,7 @@ function remapPathPrefix(candidatePath: string, fromPrefix: string, toPrefix: st
   return `${toPrefix}${candidatePath.slice(fromPrefix.length)}`;
 }
 
-export function useOpenFiles() {
+export function useOpenFiles(workspaceIndex = 0) {
   const [openFiles, setOpenFiles] = useState<OpenFile[]>([]);
   const [activeTab, setActiveTabState] = useState<string>(loadPersistedTab);
   const initializedRef = useRef(false);
@@ -66,7 +66,7 @@ export function useOpenFiles() {
     const files: OpenFile[] = [];
     for (const p of paths) {
       try {
-        const res = await fetch(`/api/files/read?path=${encodeURIComponent(p)}`);
+        const res = await fetch(`/api/files/read?workspaceIndex=${workspaceIndex}&path=${encodeURIComponent(p)}`);
         if (!res.ok) continue;
         const data = await res.json();
         if (!data.ok) continue;
@@ -143,7 +143,7 @@ export function useOpenFiles() {
 
     // Fetch content for text files
     try {
-      const res = await fetch(`/api/files/read?path=${encodeURIComponent(filePath)}`);
+      const res = await fetch(`/api/files/read?workspaceIndex=${workspaceIndex}&path=${encodeURIComponent(filePath)}`);
       const data = await res.json();
 
       setOpenFiles((prev) =>
@@ -253,7 +253,7 @@ export function useOpenFiles() {
 
   const reloadFile = useCallback(async (filePath: string) => {
     try {
-      const res = await fetch(`/api/files/read?path=${encodeURIComponent(filePath)}`);
+      const res = await fetch(`/api/files/read?workspaceIndex=${workspaceIndex}&path=${encodeURIComponent(filePath)}`);
       const data = await res.json();
 
       if (!data.ok) {

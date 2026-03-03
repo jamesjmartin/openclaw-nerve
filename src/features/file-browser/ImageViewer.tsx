@@ -7,9 +7,10 @@ import type { OpenFile } from './types';
 
 interface ImageViewerProps {
   file: OpenFile;
+  workspaceIndex?: number;
 }
 
-export function ImageViewer({ file }: ImageViewerProps) {
+export function ImageViewer({ file, workspaceIndex = 0 }: ImageViewerProps) {
   if (file.loading) {
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground text-xs gap-2">
@@ -32,7 +33,7 @@ export function ImageViewer({ file }: ImageViewerProps) {
   return (
     <div className="h-full flex items-center justify-center p-6 overflow-auto bg-[#0a0a0a]">
       <img
-        src={`/api/files/raw?path=${encodeURIComponent(file.path)}`}
+        src={`/api/files/raw?workspaceIndex=${workspaceIndex}&path=${encodeURIComponent(file.path)}`}
         alt={file.name}
         className="max-w-full max-h-full object-contain rounded"
         draggable={false}

@@ -55,6 +55,10 @@ interface FileTreePanelProps {
   onCloseOpenPaths?: (pathPrefix: string) => void;
   /** Called externally when a file changes (SSE) — refreshes affected directory */
   lastChangedPath?: string | null;
+  /** Optional external workspace state (for lifting state to parent) */
+  activeWorkspace?: number;
+  /** Optional callback when workspace changes (for lifting state to parent) */
+  onWorkspaceChange?: (index: number) => void;
 }
 
 interface FileOpResult {
@@ -80,10 +84,16 @@ export function FileTreePanel({
   onRemapOpenPaths,
   onCloseOpenPaths,
   lastChangedPath,
+  activeWorkspace: externalActiveWorkspace,
+  onWorkspaceChange,
 }: FileTreePanelProps) {
   // State for workspaces
   const [workspaces, setWorkspaces] = useState<WorkspaceInfo[]>([]);
-  const [activeWorkspace, setActiveWorkspace] = useState(0);
+  const [internalActiveWorkspace, setInternalActiveWorkspace] = useState(0);
+  
+  // Use external workspace state if provided, otherwise use internal
+  const activeWorkspace = externalActiveWorkspace ?? internalActiveWorkspace;
+  const setActiveWorkspace = onWorkspaceChange ?? setInternalActiveWorkspace;
   const [isCustomWorkspace, setIsCustomWorkspace] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<TreeEntry | null>(null);
 

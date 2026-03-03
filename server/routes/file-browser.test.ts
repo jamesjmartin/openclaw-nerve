@@ -80,7 +80,7 @@ describe('file-browser routes', () => {
 
     it('returns 400 for invalid workspace index', async () => {
       const app = await buildApp();
-      const res = await app.request('/api/files/tree?workspace=abc');
+      const res = await app.request('/api/files/tree?workspaceIndex=abc');
       expect(res.status).toBe(400);
     });
   });
@@ -94,7 +94,7 @@ describe('file-browser routes', () => {
 
     it('returns 400 for invalid workspace index', async () => {
       const app = await buildApp();
-      const res = await app.request('/api/files/read?path=test.md&workspace=abc');
+      const res = await app.request('/api/files/read?path=test.md&workspaceIndex=abc');
       expect(res.status).toBe(400);
     });
 
@@ -388,7 +388,7 @@ describe('file-browser routes', () => {
 
     it('returns 400 for invalid workspace index', async () => {
       const app = await buildApp();
-      const res = await app.request('/api/files/raw?path=photo.png&workspace=abc');
+      const res = await app.request('/api/files/raw?path=photo.png&workspaceIndex=abc');
       expect(res.status).toBe(400);
     });
 
@@ -407,10 +407,10 @@ describe('file-browser routes', () => {
       expect(res.headers.get('Content-Type')).toBe('image/png');
     });
 
-    it('accepts workspace query parameter', async () => {
+    it('accepts workspaceIndex query parameter', async () => {
       await fs.writeFile(path.join(tmpDir, 'workspace.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
       const app = await buildApp();
-      const res = await app.request('/api/files/raw?path=workspace.png&workspace=0');
+      const res = await app.request('/api/files/raw?path=workspace.png&workspaceIndex=0');
       expect(res.status).toBe(200);
       expect(res.headers.get('Content-Type')).toBe('image/png');
     });
@@ -485,7 +485,7 @@ describe('file-browser routes', () => {
       app.route('/', mod.default);
 
       // Test workspace 0
-      const res0 = await app.request('/api/files/tree?workspace=0');
+      const res0 = await app.request('/api/files/tree?workspaceIndex=0');
       expect(res0.status).toBe(200);
       const json0 = (await res0.json()) as { ok: boolean; entries: Array<{ name: string }> };
       const names0 = json0.entries.map(e => e.name);
@@ -493,7 +493,7 @@ describe('file-browser routes', () => {
       expect(names0).not.toContain('file2.md');
 
       // Test workspace 1
-      const res1 = await app.request('/api/files/tree?workspace=1');
+      const res1 = await app.request('/api/files/tree?workspaceIndex=1');
       expect(res1.status).toBe(200);
       const json1 = (await res1.json()) as { ok: boolean; entries: Array<{ name: string }> };
       const names1 = json1.entries.map(e => e.name);
@@ -527,13 +527,13 @@ describe('file-browser routes', () => {
       app.route('/', mod.default);
 
       // Read from workspace 0
-      const res0 = await app.request('/api/files/read?path=test.md&workspace=0');
+      const res0 = await app.request('/api/files/read?path=test.md&workspaceIndex=0');
       expect(res0.status).toBe(200);
       const json0 = (await res0.json()) as { ok: boolean; content: string };
       expect(json0.content).toBe('workspace 1 content');
 
       // Read from workspace 1
-      const res1 = await app.request('/api/files/read?path=test.md&workspace=1');
+      const res1 = await app.request('/api/files/read?path=test.md&workspaceIndex=1');
       expect(res1.status).toBe(200);
       const json1 = (await res1.json()) as { ok: boolean; content: string };
       expect(json1.content).toBe('workspace 2 content');
