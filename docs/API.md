@@ -1137,12 +1137,13 @@ Write file contents with optimistic concurrency via mtime comparison. If the fil
 ```
 
 **Request Fields:**
+
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `path` | string | Yes | Relative path within the workspace |
 | `content` | string | Yes | File content to write |
 | `mtime` | number | No | Expected modification time for conflict detection |
-| `workspaceIndex` | number | No | Worksp letdsdace index (default: 0) |
+| `workspaceIndex` | number | No | Workspace index (default: 0) |
 
 **Response (success):**
 ```json

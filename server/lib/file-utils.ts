@@ -62,14 +62,19 @@ export function getWorkspaceRoots(): string[] {
 /** Resolve the workspace root directory for a specific workspace index */
 export function getWorkspaceRoot(workspaceIndex = 0): string {
   const roots = getWorkspaceRoots();
-  return roots[workspaceIndex] || roots[0];
+  if (workspaceIndex < 0 || workspaceIndex >= roots.length) {
+    throw new RangeError(
+      `Workspace index ${workspaceIndex} is out of bounds (0-${roots.length - 1})`
+    );
+  }
+  return roots[workspaceIndex];
 }
 
-/** Check if the current workspace is using a custom path from NERVE_FILE_BROWSER_PATHS */
+/** Check if the current workspace is using a custom path from NERVE_WORKSPACE_PATHS */
 export function isCustomWorkspace(): boolean {
   if (config.fileBrowserPaths) {
-    const paths = config.fileBrowserPaths.split(',').map(p => p.trim());
-    return paths.length > 0 && paths[0].length > 0;
+    const paths = config.fileBrowserPaths.split(',').map(p => p.trim()).filter(p => p.length > 0);
+    return paths.length > 0;
   }
   return false;
 }

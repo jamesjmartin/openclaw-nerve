@@ -416,10 +416,11 @@ export async function trashEntry(params: { path: string }): Promise<FileOpResult
   });
 }
 
-export async function deleteEntry(params: { path: string }): Promise<FileOpResult> {
+export async function deleteEntry(params: { path: string; workspaceIndex?: number }): Promise<FileOpResult> {
   return withFileOpsLock(async () => {
-    const sourceAbs = await resolveExistingPathOrThrow(params.path);
-    const sourceRel = toWorkspaceRelative(sourceAbs);
+    const workspaceIndex = params.workspaceIndex ?? 0;
+    const sourceAbs = await resolveExistingPathOrThrow(params.path, workspaceIndex);
+    const sourceRel = toWorkspaceRelative(sourceAbs, workspaceIndex);
 
     assertNotProtected(sourceRel);
     

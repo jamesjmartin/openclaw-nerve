@@ -397,7 +397,7 @@ export function FileTreePanel({
     
     // Check if it was permanent delete (empty 'to' path)
     if (result.to === '') {
-      showToast({ type: 'success', message: `Permanently deleted ${basename(result.from)}` });
+      showToast({ type: 'success', message: `Permanently deleted ${basename(result.from)}` }, 3000);
     } else {
       showToast(
         {

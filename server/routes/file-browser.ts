@@ -343,7 +343,7 @@ app.post('/api/files/move', async (c) => {
 // ── POST /api/files/trash ─────────────────────────────────────────────
 
 app.post('/api/files/trash', async (c) => {
-  let body: { path?: string };
+  let body: { path?: string; workspaceIndex?: number };
   try {
     body = await c.req.json();
   } catch {
@@ -354,10 +354,12 @@ app.post('/api/files/trash', async (c) => {
     return c.json({ ok: false, error: 'Missing path' }, 400);
   }
 
+  const workspaceIndex = body.workspaceIndex ?? 0;
+
   try {
     // Check if using custom workspace - use permanent delete
     if (isCustomWorkspace()) {
-      const result = await deleteEntry({ path: body.path });
+      const result = await deleteEntry({ path: body.path, workspaceIndex });
       return c.json({ ok: true, ...result });
     }
     

@@ -124,20 +124,20 @@ describe('file-utils', () => {
       expect(root).toBe(workspace2);
     });
 
-    it('returns first workspace when index out of bounds', async () => {
-      const workspace1 = path.join(tmpDir, 'workspace1');
-
-      vi.doMock('./config.js', () => ({
+    it('throws RangeError when index out of bounds', async () => {
+      vi.resetModules();
+      vi.doMock('../lib/config.js', () => ({
         config: {
+          auth: false, port: 3000, host: '127.0.0.1', sslPort: 3443,
           memoryPath: path.join(tmpDir, 'MEMORY.md'),
-          fileBrowserPaths: workspace1,
+          fileBrowserPaths: tmpDir,
         },
       }));
 
       const { getWorkspaceRoot } = await import('./file-utils.js');
-      const root = getWorkspaceRoot(99);
 
-      expect(root).toBe(workspace1);
+      expect(() => getWorkspaceRoot(99)).toThrow(RangeError);
+      expect(() => getWorkspaceRoot(99)).toThrow('Workspace index 99 is out of bounds');
     });
   });
 
