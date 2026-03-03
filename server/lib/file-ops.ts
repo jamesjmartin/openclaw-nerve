@@ -416,6 +416,26 @@ export async function trashEntry(params: { path: string }): Promise<FileOpResult
   });
 }
 
+export async function deleteEntry(params: { path: string }): Promise<FileOpResult> {
+  return withFileOpsLock(async () => {
+    const sourceAbs = await resolveExistingPathOrThrow(params.path);
+    const sourceRel = toWorkspaceRelative(sourceAbs);
+
+    assertNotProtected(sourceRel);
+    
+    const sourceStat = await statOrThrow(sourceAbs);
+
+    // Permanent deletion
+    if (sourceStat.isDirectory()) {
+      await fs.rm(sourceAbs, { recursive: true, force: true });
+    } else {
+      await fs.unlink(sourceAbs);
+    }
+
+    return { from: sourceRel, to: '' };
+  });
+}
+
 export async function restoreEntry(params: { path: string }): Promise<FileOpResult> {
   return withFileOpsLock(async () => {
     const sourceAbs = await resolveExistingPathOrThrow(params.path);

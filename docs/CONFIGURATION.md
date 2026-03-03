@@ -251,11 +251,18 @@ REPLICATE_BASE_URL=https://api.replicate.com/v1
 | `NERVE_VOICE_PHRASES_PATH` | `~/.nerve/voice-phrases.json` | Override location for per-language voice phrase overrides |
 | `WORKSPACE_ROOT` | *(auto-detected)* | Allowed base directory for git workdir registration. Auto-derived from `git worktree list` or parent of `process.cwd()` |
 
+### File Browser
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `NERVE_WORKSPACE_PATHS` | *(none)* | Custom workspace directory paths. Comma-separated for multiple workspaces. Custom workspaces use permanent deletion instead of trash. |
+
 ```env
 MEMORY_PATH=/custom/path/MEMORY.md
 MEMORY_DIR=/custom/path/memory/
 SESSIONS_DIR=/custom/path/sessions/
 NERVE_VOICE_PHRASES_PATH=/custom/path/voice-phrases.json
+NERVE_WORKSPACE_PATHS=/home/user/workspace1,/home/user/workspace2
 ```
 
 ### TTS Cache

@@ -34,7 +34,7 @@ function mergeChildren(
   });
 }
 
-export function useFileTree() {
+export function useFileTree(workspaceIndex = 0) {
   const [entries, setEntries] = useState<TreeEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -56,7 +56,9 @@ export function useFileTree() {
   // Fetch a directory's children
   const fetchChildren = useCallback(async (dirPath: string): Promise<TreeEntry[] | null> => {
     try {
-      const params = dirPath ? `?path=${encodeURIComponent(dirPath)}&depth=1` : '?depth=1';
+      const params = dirPath 
+        ? `?workspace=${workspaceIndex}&path=${encodeURIComponent(dirPath)}&depth=1` 
+        : `?workspace=${workspaceIndex}&depth=1`;
       const res = await fetch(`/api/files/tree${params}`);
       if (!res.ok) return null;
       const data = await res.json();
@@ -64,7 +66,7 @@ export function useFileTree() {
     } catch {
       return null;
     }
-  }, []);
+  }, [workspaceIndex]);
 
   // Initial load
   const loadRoot = useCallback(async () => {

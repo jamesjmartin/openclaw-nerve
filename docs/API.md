@@ -1047,11 +1047,37 @@ Lists all OpenClaw skills via `openclaw skills list --json`.
 
 ## File Browser
 
-Browse, read, and edit workspace files. All paths are restricted to the workspace directory with traversal protection.
+Browse, read, and edit workspace files. All paths are restricted to the workspace directory with traversal protection. Supports multiple workspaces when `NERVE_WORKSPACE_PATHS` is configured.
+
+### `GET /api/files/workspace-info`
+
+Returns workspace configuration and available workspaces.
+
+**Query Parameters:** None
+
+**Response:**
+```json
+{
+  "ok": true,
+  "isCustomWorkspace": false,
+  "workspaces": [
+    {
+      "index": 0,
+      "root": "/path/to/workspace",
+      "name": "workspace"
+    }
+  ]
+}
+```
 
 ### `GET /api/files/tree`
 
 Returns the workspace directory tree. Excludes `node_modules`, `.git`, `dist`, `server-dist`, and other build artifacts.
+
+**Query Parameters:**
+- `workspace` (optional, number): Workspace index (default: 0)
+- `path` (optional, string): Subdirectory path  
+- `depth` (optional, number): Tree depth (default: 1)
 
 **Response:**
 ```json
@@ -1079,6 +1105,7 @@ Read a file's contents with its modification time (for conflict detection on sav
 | Param | Description |
 |-------|-------------|
 | `path` | Relative path within the workspace |
+| `workspace` (optional, number) | Workspace index (default: 0) |
 
 **Response:**
 ```json
@@ -1095,7 +1122,7 @@ Read a file's contents with its modification time (for conflict detection on sav
 | 400 | Missing `path`, path traversal detected, or binary file |
 | 404 | File not found |
 
-### `POST /api/files/write`
+### `PUT /api/files/write`
 
 Write file contents with optimistic concurrency via mtime comparison. If the file was modified since it was last read, returns 409 Conflict.
 
@@ -1104,9 +1131,18 @@ Write file contents with optimistic concurrency via mtime comparison. If the fil
 {
   "path": "MEMORY.md",
   "content": "# Updated content\n...",
-  "mtime": 1771355007542
+  "mtime": 1771355007542,
+  "workspaceIndex": 0
 }
 ```
+
+**Request Fields:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `path` | string | Yes | Relative path within the workspace |
+| `content` | string | Yes | File content to write |
+| `mtime` | number | No | Expected modification time for conflict detection |
+| `workspaceIndex` | number | No | Worksp letdsdace index (default: 0) |
 
 **Response (success):**
 ```json

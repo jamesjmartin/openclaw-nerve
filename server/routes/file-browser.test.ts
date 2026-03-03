@@ -185,7 +185,7 @@ describe('file-browser routes', () => {
       const res = await app.request('/api/files/write', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: 'conflict.md', content: 'updated', expectedMtime: 1 }),
+        body: JSON.stringify({ path: 'conflict.md', content: 'updated', mtime: 1 }),
       });
       expect(res.status).toBe(409);
     });
@@ -387,6 +387,324 @@ describe('file-browser routes', () => {
       const res = await app.request('/api/files/raw?path=photo.png');
       expect(res.status).toBe(200);
       expect(res.headers.get('Content-Type')).toBe('image/png');
+    });
+  });
+
+  describe('GET /api/files/workspace-info', () => {
+    it('returns workspace information with default workspace', async () => {
+      const app = await buildApp();
+      const res = await app.request('/api/files/workspace-info');
+      expect(res.status).toBe(200);
+      const json = (await res.json()) as { ok: boolean; isCustomWorkspace: boolean; workspaces: Array<{ index: number; root: string; name: string }> };
+      expect(json.ok).toBe(true);
+      expect(json.isCustomWorkspace).toBe(false);
+      expect(json.workspaces).toHaveLength(1);
+      expect(json.workspaces[0].index).toBe(0);
+      expect(json.workspaces[0].root).toBe(tmpDir);
+    });
+
+    it('returns multiple workspaces when configured', async () => {
+      vi.resetModules();
+      const workspace1 = await fs.mkdtemp(path.join(os.tmpdir(), 'ws1-'));
+      const workspace2 = await fs.mkdtemp(path.join(os.tmpdir(), 'ws2-'));
+
+      vi.doMock('../lib/config.js', () => ({
+        config: {
+          auth: false, port: 3000, host: '127.0.0.1', sslPort: 3443,
+          memoryPath: path.join(workspace1, 'MEMORY.md'),
+          fileBrowserPaths: `${workspace1},${workspace2}`,
+        },
+        SESSION_COOKIE_NAME: 'nerve_session_3000',
+      }));
+
+      const mod = await import('./file-browser.js');
+      const app = new Hono();
+      app.route('/', mod.default);
+
+      const res = await app.request('/api/files/workspace-info');
+      expect(res.status).toBe(200);
+      const json = (await res.json()) as { ok: boolean; isCustomWorkspace: boolean; workspaces: Array<{ index: number; root: string; name: string }> };
+      expect(json.ok).toBe(true);
+      expect(json.isCustomWorkspace).toBe(true);
+      expect(json.workspaces).toHaveLength(2);
+      expect(json.workspaces[0].root).toBe(workspace1);
+      expect(json.workspaces[1].root).toBe(workspace2);
+
+      await fs.rm(workspace1, { recursive: true, force: true });
+      await fs.rm(workspace2, { recursive: true, force: true });
+    });
+  });
+
+  describe('workspace index parameter', () => {
+    it('GET /api/files/tree accepts workspace query parameter', async () => {
+      vi.resetModules();
+      const workspace1 = await fs.mkdtemp(path.join(os.tmpdir(), 'ws1-'));
+      const workspace2 = await fs.mkdtemp(path.join(os.tmpdir(), 'ws2-'));
+      
+      await fs.writeFile(path.join(workspace1, 'MEMORY.md'), '# Workspace 1');
+      await fs.writeFile(path.join(workspace1, 'file1.md'), 'content1');
+      await fs.writeFile(path.join(workspace2, 'file2.md'), 'content2');
+
+      vi.doMock('../lib/config.js', () => ({
+        config: {
+          auth: false, port: 3000, host: '127.0.0.1', sslPort: 3443,
+          memoryPath: path.join(workspace1, 'MEMORY.md'),
+          fileBrowserPaths: `${workspace1},${workspace2}`,
+        },
+        SESSION_COOKIE_NAME: 'nerve_session_3000',
+      }));
+
+      const mod = await import('./file-browser.js');
+      const app = new Hono();
+      app.route('/', mod.default);
+
+      // Test workspace 0
+      const res0 = await app.request('/api/files/tree?workspace=0');
+      expect(res0.status).toBe(200);
+      const json0 = (await res0.json()) as { ok: boolean; entries: Array<{ name: string }> };
+      const names0 = json0.entries.map(e => e.name);
+      expect(names0).toContain('file1.md');
+      expect(names0).not.toContain('file2.md');
+
+      // Test workspace 1
+      const res1 = await app.request('/api/files/tree?workspace=1');
+      expect(res1.status).toBe(200);
+      const json1 = (await res1.json()) as { ok: boolean; entries: Array<{ name: string }> };
+      const names1 = json1.entries.map(e => e.name);
+      expect(names1).toContain('file2.md');
+      expect(names1).not.toContain('file1.md');
+
+      await fs.rm(workspace1, { recursive: true, force: true });
+      await fs.rm(workspace2, { recursive: true, force: true });
+    });
+
+    it('GET /api/files/read accepts workspace query parameter', async () => {
+      vi.resetModules();
+      const workspace1 = await fs.mkdtemp(path.join(os.tmpdir(), 'ws1-'));
+      const workspace2 = await fs.mkdtemp(path.join(os.tmpdir(), 'ws2-'));
+      
+      await fs.writeFile(path.join(workspace1, 'MEMORY.md'), '# Workspace 1');
+      await fs.writeFile(path.join(workspace1, 'test.md'), 'workspace 1 content');
+      await fs.writeFile(path.join(workspace2, 'test.md'), 'workspace 2 content');
+
+      vi.doMock('../lib/config.js', () => ({
+        config: {
+          auth: false, port: 3000, host: '127.0.0.1', sslPort: 3443,
+          memoryPath: path.join(workspace1, 'MEMORY.md'),
+          fileBrowserPaths: `${workspace1},${workspace2}`,
+        },
+        SESSION_COOKIE_NAME: 'nerve_session_3000',
+      }));
+
+      const mod = await import('./file-browser.js');
+      const app = new Hono();
+      app.route('/', mod.default);
+
+      // Read from workspace 0
+      const res0 = await app.request('/api/files/read?path=test.md&workspace=0');
+      expect(res0.status).toBe(200);
+      const json0 = (await res0.json()) as { ok: boolean; content: string };
+      expect(json0.content).toBe('workspace 1 content');
+
+      // Read from workspace 1
+      const res1 = await app.request('/api/files/read?path=test.md&workspace=1');
+      expect(res1.status).toBe(200);
+      const json1 = (await res1.json()) as { ok: boolean; content: string };
+      expect(json1.content).toBe('workspace 2 content');
+
+      await fs.rm(workspace1, { recursive: true, force: true });
+      await fs.rm(workspace2, { recursive: true, force: true });
+    });
+
+    it('PUT /api/files/write accepts workspaceIndex in body', async () => {
+      vi.resetModules();
+      const workspace1 = await fs.mkdtemp(path.join(os.tmpdir(), 'ws1-'));
+      const workspace2 = await fs.mkdtemp(path.join(os.tmpdir(), 'ws2-'));
+      
+      await fs.writeFile(path.join(workspace1, 'MEMORY.md'), '# Workspace 1');
+
+      vi.doMock('../lib/config.js', () => ({
+        config: {
+          auth: false, port: 3000, host: '127.0.0.1', sslPort: 3443,
+          memoryPath: path.join(workspace1, 'MEMORY.md'),
+          fileBrowserPaths: `${workspace1},${workspace2}`,
+        },
+        SESSION_COOKIE_NAME: 'nerve_session_3000',
+      }));
+
+      const mod = await import('./file-browser.js');
+      const app = new Hono();
+      app.route('/', mod.default);
+
+      // Write to workspace 1
+      const res = await app.request('/api/files/write', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: 'new.md', content: 'test content', workspaceIndex: 1 }),
+      });
+
+      expect(res.status).toBe(200);
+      
+      // Verify file was written to workspace 1, not workspace 0
+      await expect(fs.readFile(path.join(workspace2, 'new.md'), 'utf-8')).resolves.toBe('test content');
+      await expect(fs.access(path.join(workspace1, 'new.md'))).rejects.toThrow();
+
+      await fs.rm(workspace1, { recursive: true, force: true });
+      await fs.rm(workspace2, { recursive: true, force: true });
+    });
+  });
+
+  describe('POST /api/files/trash with custom workspace', () => {
+    it('permanently deletes files in custom workspace', async () => {
+      vi.resetModules();
+      const customWorkspace = await fs.mkdtemp(path.join(os.tmpdir(), 'custom-'));
+      await fs.writeFile(path.join(customWorkspace, 'MEMORY.md'), '# Custom');
+      await fs.writeFile(path.join(customWorkspace, 'delete-me.md'), 'content');
+
+      vi.doMock('../lib/config.js', () => ({
+        config: {
+          auth: false, port: 3000, host: '127.0.0.1', sslPort: 3443,
+          memoryPath: path.join(customWorkspace, 'MEMORY.md'),
+          fileBrowserPaths: customWorkspace,
+        },
+        SESSION_COOKIE_NAME: 'nerve_session_3000',
+      }));
+
+      const mod = await import('./file-browser.js');
+      const app = new Hono();
+      app.route('/', mod.default);
+
+      const res = await app.request('/api/files/trash', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: 'delete-me.md' }),
+      });
+
+      expect(res.status).toBe(200);
+      const json = (await res.json()) as { ok: boolean; from: string; to: string };
+      expect(json.ok).toBe(true);
+      expect(json.to).toBe(''); // Empty 'to' indicates permanent delete
+
+      // Verify file is gone
+      await expect(fs.access(path.join(customWorkspace, 'delete-me.md'))).rejects.toThrow();
+      
+      // Verify no .trash directory was created
+      await expect(fs.access(path.join(customWorkspace, '.trash'))).rejects.toThrow();
+
+      await fs.rm(customWorkspace, { recursive: true, force: true });
+    });
+
+    it('uses trash for default workspace', async () => {
+      await fs.writeFile(path.join(tmpDir, 'trash-me.md'), 'content');
+      const app = await buildApp();
+
+      const res = await app.request('/api/files/trash', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: 'trash-me.md' }),
+      });
+
+      expect(res.status).toBe(200);
+      const json = (await res.json()) as { ok: boolean; from: string; to: string };
+      expect(json.ok).toBe(true);
+      expect(json.to.startsWith('.trash/')).toBe(true); // Non-empty 'to' indicates trash
+
+      // Verify file is in trash
+      const trashPath = path.join(tmpDir, json.to);
+      await expect(fs.access(trashPath)).resolves.toBeUndefined();
+    });
+  });
+
+  describe('Regression Tests - Backward Compatibility', () => {
+    it('maintains existing behavior when no workspace env var', async () => {
+      const app = await buildApp();
+      
+      // Should use default workspace (tmpDir)
+      const res = await app.request('/api/files/workspace-info');
+      const json = (await res.json()) as { ok: boolean; isCustomWorkspace: boolean; workspaces: Array<{ index: number; root: string }> };
+      expect(json.isCustomWorkspace).toBe(false);
+      expect(json.workspaces).toHaveLength(1);
+      expect(json.workspaces[0].root).toBe(tmpDir);
+    });
+
+    it('endpoints work without workspace parameters', async () => {
+      await fs.writeFile(path.join(tmpDir, 'test.md'), 'content');
+      const app = await buildApp();
+
+      // GET /api/files/tree without workspace query
+      const treeRes = await app.request('/api/files/tree');
+      expect(treeRes.status).toBe(200);
+      const treeJson = (await treeRes.json()) as { ok: boolean; entries: Array<{ name: string }> };
+      expect(treeJson.entries.map(e => e.name)).toContain('test.md');
+
+      // GET /api/files/read without workspace query
+      const readRes = await app.request('/api/files/read?path=test.md');
+      expect(readRes.status).toBe(200);
+      const readJson = (await readRes.json()) as { ok: boolean; content: string };
+      expect(readJson.content).toBe('content');
+
+      // PUT /api/files/write without workspaceIndex
+      const writeRes = await app.request('/api/files/write', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: 'new.md', content: 'new content' }),
+      });
+      expect(writeRes.status).toBe(200);
+      await expect(fs.access(path.join(tmpDir, 'new.md'))).resolves.toBeUndefined();
+    });
+
+    it('trash system unchanged for default workspace', async () => {
+      await fs.writeFile(path.join(tmpDir, 'trash-test.md'), 'content');
+      const app = await buildApp();
+
+      // Trash the file
+      const trashRes = await app.request('/api/files/trash', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: 'trash-test.md' }),
+      });
+      expect(trashRes.status).toBe(200);
+      const trashJson = (await trashRes.json()) as { ok: boolean; from: string; to: string; undoTtlMs: number };
+      expect(trashJson.to.startsWith('.trash/')).toBe(true);
+      expect(trashJson.undoTtlMs).toBeGreaterThan(0);
+
+      // Verify .trash directory and index exist
+      await expect(fs.access(path.join(tmpDir, '.trash'))).resolves.toBeUndefined();
+      await expect(fs.access(path.join(tmpDir, '.trash', '.index.json'))).resolves.toBeUndefined();
+
+      // Restore the file
+      const restoreRes = await app.request('/api/files/restore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: trashJson.to }),
+      });
+      expect(restoreRes.status).toBe(200);
+      await expect(fs.access(path.join(tmpDir, 'trash-test.md'))).resolves.toBeUndefined();
+    });
+
+    it('move and rename operations unchanged', async () => {
+      await fs.writeFile(path.join(tmpDir, 'old.md'), 'content');
+      await fs.mkdir(path.join(tmpDir, 'docs'));
+      const app = await buildApp();
+
+      // Rename operation
+      const renameRes = await app.request('/api/files/rename', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: 'old.md', newName: 'renamed.md' }),
+      });
+      expect(renameRes.status).toBe(200);
+      await expect(fs.access(path.join(tmpDir, 'old.md'))).rejects.toThrow();
+      await expect(fs.access(path.join(tmpDir, 'renamed.md'))).resolves.toBeUndefined();
+
+      // Move operation
+      const moveRes = await app.request('/api/files/move', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourcePath: 'renamed.md', targetDirPath: 'docs' }),
+      });
+      expect(moveRes.status).toBe(200);
+      await expect(fs.access(path.join(tmpDir, 'docs', 'renamed.md'))).resolves.toBeUndefined();
     });
   });
 });

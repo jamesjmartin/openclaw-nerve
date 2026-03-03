@@ -16,9 +16,11 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {
   getWorkspaceRoot,
+  getWorkspaceRoots,
   resolveWorkspacePath,
   isExcluded,
   isBinary,
+  isCustomWorkspace,
   MAX_FILE_SIZE,
 } from '../lib/file-utils.js';
 import {
@@ -27,6 +29,7 @@ import {
   renameEntry,
   restoreEntry,
   trashEntry,
+  deleteEntry,
 } from '../lib/file-ops.js';
 
 const app = new Hono();
@@ -51,6 +54,7 @@ async function listDirectory(
   depth: number,
 ): Promise<TreeEntry[]> {
   const entries: TreeEntry[] = [];
+  const showHiddenFiles = isCustomWorkspace();
 
   let items;
   try {
@@ -74,7 +78,10 @@ async function listDirectory(
       // Internal metadata file for restore bookkeeping.
       if (item.name === '.index.json') continue;
     } else if (item.name.startsWith('.') && item.name !== '.nerveignore' && item.name !== '.trash') {
-      continue;
+      // Only hide hidden files if NOT using custom workspace
+      if (!showHiddenFiles) {
+        continue;
+      }
     }
 
     const relativePath = basePath ? path.join(basePath, item.name) : item.name;
@@ -117,17 +124,33 @@ function handleFileOpError(c: Context, err: unknown) {
   return c.json({ ok: false, error: message }, 500);
 }
 
+// ── GET /api/files/workspace-info ───────────────────────────────────────
+
+app.get('/api/files/workspace-info', async (c) => {
+  const roots = getWorkspaceRoots();
+  return c.json({ 
+    ok: true, 
+    isCustomWorkspace: isCustomWorkspace(),
+    workspaces: roots.map((root, index) => ({
+      index,
+      root,
+      name: path.basename(root)
+    }))
+  });
+});
+
 // ── GET /api/files/tree ──────────────────────────────────────────────
 
 app.get('/api/files/tree', async (c) => {
-  const root = getWorkspaceRoot();
+  const workspaceIndex = Number(c.req.query('workspace') || '0');
+  const root = getWorkspaceRoot(workspaceIndex);
   const subPath = c.req.query('path') || '';
   const depth = Math.min(Math.max(Number(c.req.query('depth')) || 1, 1), 5);
 
   // Resolve the target directory
   let targetDir: string;
   if (subPath) {
-    const resolved = await resolveWorkspacePath(subPath);
+    const resolved = await resolveWorkspacePath(subPath, { workspaceIndex });
     if (!resolved) {
       return c.json({ ok: false, error: 'Invalid path' }, 400);
     }
@@ -155,11 +178,13 @@ app.get('/api/files/tree', async (c) => {
 
 app.get('/api/files/read', async (c) => {
   const filePath = c.req.query('path');
+  const workspaceIndex = Number(c.req.query('workspace') || '0');
+  
   if (!filePath) {
     return c.json({ ok: false, error: 'Missing path parameter' }, 400);
   }
 
-  const resolved = await resolveWorkspacePath(filePath);
+  const resolved = await resolveWorkspacePath(filePath, { workspaceIndex });
   if (!resolved) {
     return c.json({ ok: false, error: 'Invalid or excluded path' }, 403);
   }
@@ -201,14 +226,14 @@ app.get('/api/files/read', async (c) => {
 // ── PUT /api/files/write ─────────────────────────────────────────────
 
 app.put('/api/files/write', async (c) => {
-  let body: { path?: string; content?: string; expectedMtime?: number };
+  let body: { path?: string; content?: string; mtime?: number; workspaceIndex?: number };
   try {
     body = await c.req.json();
   } catch {
     return c.json({ ok: false, error: 'Invalid JSON body' }, 400);
   }
 
-  const { path: filePath, content, expectedMtime } = body;
+  const { path: filePath, content, mtime, workspaceIndex = 0 } = body;
 
   if (!filePath || typeof filePath !== 'string') {
     return c.json({ ok: false, error: 'Missing path' }, 400);
@@ -220,7 +245,7 @@ app.put('/api/files/write', async (c) => {
     return c.json({ ok: false, error: 'Content too large (max 1MB)' }, 413);
   }
 
-  const resolved = await resolveWorkspacePath(filePath, { allowNonExistent: true });
+  const resolved = await resolveWorkspacePath(filePath, { allowNonExistent: true, workspaceIndex });
   if (!resolved) {
     return c.json({ ok: false, error: 'Invalid or excluded path' }, 403);
   }
@@ -229,12 +254,12 @@ app.put('/api/files/write', async (c) => {
     return c.json({ ok: false, error: 'Cannot write binary files' }, 415);
   }
 
-  // Conflict detection: check mtime if expectedMtime provided
-  if (typeof expectedMtime === 'number') {
+  // Conflict detection: check mtime if mtime provided
+  if (typeof mtime === 'number') {
     try {
       const stat = await fs.stat(resolved);
       const currentMtime = Math.floor(stat.mtimeMs);
-      if (currentMtime !== expectedMtime) {
+      if (currentMtime !== mtime) {
         return c.json({
           ok: false,
           error: 'File was modified since you loaded it',
@@ -330,6 +355,13 @@ app.post('/api/files/trash', async (c) => {
   }
 
   try {
+    // Check if using custom workspace - use permanent delete
+    if (isCustomWorkspace()) {
+      const result = await deleteEntry({ path: body.path });
+      return c.json({ ok: true, ...result });
+    }
+    
+    // Default workspace: use trash (existing behavior)
     const result = await trashEntry({ path: body.path });
     return c.json({ ok: true, ...result });
   } catch (err) {

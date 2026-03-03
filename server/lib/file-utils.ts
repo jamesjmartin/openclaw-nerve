@@ -46,9 +46,32 @@ export function isBinary(name: string): boolean {
 
 // ── Workspace root ───────────────────────────────────────────────────
 
-/** Resolve the workspace root directory (parent of MEMORY.md). */
-export function getWorkspaceRoot(): string {
-  return path.dirname(config.memoryPath);
+/** Get all workspace roots as an array */
+export function getWorkspaceRoots(): string[] {
+  if (config.fileBrowserPaths) {
+    const paths = config.fileBrowserPaths.split(',').map(p => p.trim()).filter(p => p.length > 0);
+    if (paths.length > 0) {
+      return paths;
+    }
+  }
+  
+  // Default to single workspace
+  return [path.dirname(config.memoryPath)];
+}
+
+/** Resolve the workspace root directory for a specific workspace index */
+export function getWorkspaceRoot(workspaceIndex = 0): string {
+  const roots = getWorkspaceRoots();
+  return roots[workspaceIndex] || roots[0];
+}
+
+/** Check if the current workspace is using a custom path from NERVE_FILE_BROWSER_PATHS */
+export function isCustomWorkspace(): boolean {
+  if (config.fileBrowserPaths) {
+    const paths = config.fileBrowserPaths.split(',').map(p => p.trim());
+    return paths.length > 0 && paths[0].length > 0;
+  }
+  return false;
 }
 
 // ── Path validation ──────────────────────────────────────────────────
@@ -61,17 +84,17 @@ export const MAX_FILE_SIZE = 1_048_576;
  *
  * Returns the resolved absolute path, or `null` if:
  * - The path escapes the workspace root (traversal)
- * - The path resolves through a symlink to outside the workspace
- * - The path is excluded
+ * - The path contains excluded segments (e.g., `node_modules`)
+ * - The file doesn't exist (unless `allowNonExistent` is true)
  *
  * For write operations where the file may not exist yet, the parent
  * directory is validated instead.
  */
 export async function resolveWorkspacePath(
   relativePath: string,
-  options?: { allowNonExistent?: boolean },
+  options?: { allowNonExistent?: boolean; workspaceIndex?: number },
 ): Promise<string | null> {
-  const root = getWorkspaceRoot();
+  const root = getWorkspaceRoot(options?.workspaceIndex);
 
   // Block obvious traversal attempts
   const normalized = path.normalize(relativePath);
