@@ -243,7 +243,8 @@ REPLICATE_BASE_URL=https://api.replicate.com/v1
 ### File Paths
 
 | Variable | Default | Description |
-|----------|---------|-------------|
+|---------|---------|-------------|
+| `FILE_BROWSER_ROOT` | *(auto-detected)* | If set, overrides OpenClaw workspace as the root directory for the workspace directory tree. In this mode, default exclusion rules are disabled and delete operations are permanent (no `.trash` recovery). |
 | `MEMORY_PATH` | `~/.openclaw/workspace/MEMORY.md` | Path to the agent's long-term memory file |
 | `MEMORY_DIR` | `~/.openclaw/workspace/memory/` | Directory for daily memory files (`YYYY-MM-DD.md`) |
 | `SESSIONS_DIR` | `~/.openclaw/agents/main/sessions/` | Session transcript directory (scanned for token usage) |
@@ -252,6 +253,7 @@ REPLICATE_BASE_URL=https://api.replicate.com/v1
 | `WORKSPACE_ROOT` | *(auto-detected)* | Allowed base directory for git workdir registration. Auto-derived from `git worktree list` or parent of `process.cwd()` |
 
 ```env
+FILE_BROWSER_ROOT=/home/user
 MEMORY_PATH=/custom/path/MEMORY.md
 MEMORY_DIR=/custom/path/memory/
 SESSIONS_DIR=/custom/path/sessions/

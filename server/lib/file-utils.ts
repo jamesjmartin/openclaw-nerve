@@ -12,13 +12,15 @@ import fs from 'node:fs/promises';
 import { config } from './config.js';
 
 // ── Exclusion rules ──────────────────────────────────────────────────
+// When FILE_BROWSER_ROOT is set, disable all exclusions to show complete directory structure
+// When using default workspace, apply standard exclusions for safety and cleanliness
 
-const EXCLUDED_NAMES = new Set([
+const DEFAULT_EXCLUDED_NAMES = new Set([
   'node_modules', '.git', 'dist', 'build', 'server-dist', 'certs',
   '.env', 'agent-log.json',
 ]);
 
-const EXCLUDED_PATTERNS = [
+const DEFAULT_EXCLUDED_PATTERNS = [
   /^\.env(\.|$)/,   // .env, .env.local, .env.production, etc.
   /\.log$/,
 ];
@@ -33,10 +35,23 @@ const BINARY_EXTENSIONS = new Set([
   '.sqlite', '.db',
 ]);
 
+/** Get exclusion names based on current config state */
+function getExcludedNames(): Set<string> {
+  return config.fileBrowserRoot && config.fileBrowserRoot.trim() !== '' ? new Set([]) : DEFAULT_EXCLUDED_NAMES;
+}
+
+/** Get exclusion patterns based on current config state */
+function getExcludedPatterns(): RegExp[] {
+  return config.fileBrowserRoot && config.fileBrowserRoot.trim() !== '' ? [] : DEFAULT_EXCLUDED_PATTERNS;
+}
+
 /** Check if a file/directory name should be excluded from the tree. */
 export function isExcluded(name: string): boolean {
-  if (EXCLUDED_NAMES.has(name)) return true;
-  return EXCLUDED_PATTERNS.some(p => p.test(name));
+  const excludedNames = getExcludedNames();
+  const excludedPatterns = getExcludedPatterns();
+
+  if (excludedNames.has(name)) return true;
+  return excludedPatterns.some(p => p.test(name));
 }
 
 /** Check if a file extension indicates binary content. */
@@ -46,9 +61,10 @@ export function isBinary(name: string): boolean {
 
 // ── Workspace root ───────────────────────────────────────────────────
 
-/** Resolve the workspace root directory (parent of MEMORY.md). */
+/** Resolve the workspace root directory. Uses FILE_BROWSER_ROOT if set and valid, otherwise parent of MEMORY.md. */
 export function getWorkspaceRoot(): string {
-  return path.dirname(config.memoryPath);
+  const customRoot = config.fileBrowserRoot.trim();
+  return customRoot ? path.resolve(customRoot) : path.dirname(config.memoryPath);
 }
 
 // ── Path validation ──────────────────────────────────────────────────

@@ -41,6 +41,7 @@ export function useFileTree() {
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(loadExpandedPaths);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [loadingPaths, setLoadingPaths] = useState<Set<string>>(new Set());
+  const [workspaceInfo, setWorkspaceInfo] = useState<{ isCustomWorkspace: boolean; rootPath: string } | null>(null);
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -60,6 +61,9 @@ export function useFileTree() {
       const res = await fetch(`/api/files/tree${params}`);
       if (!res.ok) return null;
       const data = await res.json();
+      if (data.ok && data.workspaceInfo) {
+        setWorkspaceInfo(data.workspaceInfo);
+      }
       return data.ok ? data.entries : null;
     } catch {
       return null;
@@ -199,6 +203,7 @@ export function useFileTree() {
     expandedPaths,
     selectedPath,
     loadingPaths,
+    workspaceInfo,
     toggleDirectory,
     selectFile,
     refresh,

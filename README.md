@@ -58,7 +58,7 @@ Create recurring jobs and one-shot reminders. Every scheduled run shows up as it
 |---|---|
 | **Voice I/O** | Push-to-talk + wake word, live transcription preview, language-aware stop/cancel phrases, local Whisper model picker, TTS providers (Edge/OpenAI/Replicate) |
 | **Streaming chat** | Markdown, syntax highlighting, diff views, image paste, file previews. All rendering as it streams |
-| **File browser** | Browse your workspace, rename, move, trash, and restore files. Open files in tabs |
+| **File browser** | Browse your workspace, rename, move, trash, and restore files. Open files in tabs. Support for custom workspace roots via `FILE_BROWSER_ROOT` |
 | **Built-in editor** | CodeMirror editor with syntax highlighting, conflict-safe saves, and automatic lock protection during concurrent agent edits |
 | **Multi-session** | Session tree with sub-agents, per-session model overrides, unread indicators |
 | **Kanban board** | Drag-and-drop task management with agent execution, review workflow, and proposal inbox |

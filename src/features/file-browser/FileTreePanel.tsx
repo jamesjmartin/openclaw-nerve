@@ -9,6 +9,7 @@ import { useRef, useState, useCallback, useEffect } from 'react';
 import { PanelLeftClose, PanelLeftOpen, RefreshCw, Pencil, Trash2, RotateCcw, X } from 'lucide-react';
 import { FileTreeNode } from './FileTreeNode';
 import { useFileTree } from './hooks/useFileTree';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
 import type { TreeEntry } from './types';
 
 const MIN_WIDTH = 160;
@@ -76,7 +77,7 @@ export function FileTreePanel({
 }: FileTreePanelProps) {
   const {
     entries, loading, error, expandedPaths, selectedPath,
-    loadingPaths, toggleDirectory, selectFile, refresh, handleFileChange,
+    loadingPaths, workspaceInfo, toggleDirectory, selectFile, refresh, handleFileChange,
   } = useFileTree();
 
   // React to external file changes
@@ -112,6 +113,9 @@ export function FileTreePanel({
 
   const [toast, setToast] = useState<FileTreeToast | null>(null);
   const toastTimerRef = useRef<number | null>(null);
+
+  // Permanent delete confirmation state
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{ entry: TreeEntry } | null>(null);
 
   const clearToastTimer = useCallback(() => {
     if (toastTimerRef.current !== null) {
@@ -255,6 +259,19 @@ export function FileTreePanel({
     try {
       // Dragging onto .trash behaves like explicit trash action.
       if (targetDirPath === '.trash' && !sourcePath.startsWith('.trash/')) {
+        // In custom workspaces, treat drag-to-trash as regular move since undo system doesn't exist
+        if (workspaceInfo?.isCustomWorkspace) {
+          const result = await postFileOp<FileOpResult>('/api/files/move', {
+            sourcePath,
+            targetDirPath: '.trash',
+          });
+          refresh();
+          onRemapOpenPaths?.(result.from, result.to);
+          selectFile(result.to);
+          showToast({ type: 'success', message: `Moved ${basename(result.from)} to .trash` }, 3000);
+          return;
+        }
+
         const result = await postFileOp<FileOpResult>('/api/files/trash', { path: sourcePath });
         onCloseOpenPaths?.(result.from);
         refresh();
@@ -361,6 +378,14 @@ export function FileTreePanel({
       return;
     }
 
+    // Show confirmation for permanent deletion
+    if (workspaceInfo?.isCustomWorkspace) {
+      setDeleteConfirmation({ entry });
+      setContextMenu(null);
+      return;
+    }
+
+    // Normal trash behavior (no confirmation)
     try {
       const result = await postFileOp<FileOpResult>('/api/files/trash', { path: entry.path });
       onCloseOpenPaths?.(result.from);
@@ -379,6 +404,23 @@ export function FileTreePanel({
       const message = err instanceof Error ? err.message : 'Move to Trash failed';
       showToast({ type: 'error', message }, 4500);
       setContextMenu(null);
+    }
+  }, [onCloseOpenPaths, postFileOp, refresh, showToast, workspaceInfo]);
+
+  const confirmPermanentDelete = useCallback(async (entry: TreeEntry) => {
+    try {
+      const result = await postFileOp<FileOpResult>('/api/files/trash', { path: entry.path });
+      onCloseOpenPaths?.(result.from);
+      refresh();
+      showToast(
+        { type: 'success', message: `Permanently deleted ${basename(result.from)}` },
+        3000
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Permanent deletion failed';
+      showToast({ type: 'error', message }, 4500);
+    } finally {
+      setDeleteConfirmation(null);
     }
   }, [onCloseOpenPaths, postFileOp, refresh, showToast]);
 
@@ -509,7 +551,7 @@ export function FileTreePanel({
         onDrop={handleRootDrop}
       >
         <span className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
-          Workspace
+          {workspaceInfo?.isCustomWorkspace ? workspaceInfo.rootPath : 'Workspace'}
         </span>
         <div className="flex items-center gap-0.5">
           <button
@@ -618,7 +660,7 @@ export function FileTreePanel({
               onClick={() => { void moveToTrash(menuEntry); }}
             >
               <Trash2 size={12} />
-              Move to Trash
+              {workspaceInfo?.isCustomWorkspace ? 'Permanently Delete' : 'Move to Trash'}
             </button>
           )}
 
@@ -663,6 +705,20 @@ export function FileTreePanel({
         aria-orientation="vertical"
         aria-label="Resize file explorer"
       />
+
+      {/* Permanent delete confirmation dialog */}
+      {deleteConfirmation && (
+        <ConfirmDialog
+          open={true}
+          title="Permanently Delete"
+          message={`Are you sure you want to permanently delete "${deleteConfirmation.entry.name}"? This action cannot be undone.`}
+          confirmLabel="Permanently Delete"
+          cancelLabel="Cancel"
+          variant="danger"
+          onConfirm={() => confirmPermanentDelete(deleteConfirmation.entry)}
+          onCancel={() => setDeleteConfirmation(null)}
+        />
+      )}
     </div>
   );
 }

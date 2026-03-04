@@ -21,6 +21,7 @@ export interface EnvConfig {
   MEMORY_DIR?: string;
   SESSIONS_DIR?: string;
   USAGE_FILE?: string;
+  FILE_BROWSER_ROOT?: string;
   TTS_CACHE_TTL_MS?: string;
   TTS_CACHE_MAX?: string;
   VITE_PORT?: string;
@@ -114,6 +115,7 @@ export function generateEnvContent(config: EnvConfig): string {
   if (config.MEMORY_DIR) advLines.push(`MEMORY_DIR=${config.MEMORY_DIR}`);
   if (config.SESSIONS_DIR) advLines.push(`SESSIONS_DIR=${config.SESSIONS_DIR}`);
   if (config.USAGE_FILE) advLines.push(`USAGE_FILE=${config.USAGE_FILE}`);
+  if (config.FILE_BROWSER_ROOT) advLines.push(`FILE_BROWSER_ROOT=${config.FILE_BROWSER_ROOT}`);
   if (advLines.length > 0) {
     lines.push('# Advanced');
     lines.push(...advLines);
