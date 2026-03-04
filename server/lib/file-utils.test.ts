@@ -95,6 +95,21 @@ describe('file-utils', () => {
     });
   });
 
+  describe('resolveWorkspacePath with filesystem root custom workspace', () => {
+    it('allows resolving child paths when root is "/" (or drive root)', async () => {
+      const fsRoot = path.parse(os.tmpdir()).root;
+      process.env.FILE_BROWSER_ROOT = fsRoot;
+      vi.resetModules();
+
+      const { resolveWorkspacePath } = await import('./file-utils.js');
+      const relTmpDir = path.relative(fsRoot, os.tmpdir());
+      const candidate = path.join(relTmpDir, 'non-existent.txt');
+
+      const resolved = await resolveWorkspacePath(candidate, { allowNonExistent: true });
+      expect(resolved).toBe(path.resolve(fsRoot, candidate));
+    });
+  });
+
   describe('isBinary', () => {
     it('identifies common binary file extensions', async () => {
       const { isBinary } = await import('./file-utils.js');

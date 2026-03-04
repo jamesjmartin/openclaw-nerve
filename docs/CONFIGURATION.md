@@ -244,7 +244,7 @@ REPLICATE_BASE_URL=https://api.replicate.com/v1
 
 | Variable | Default | Description |
 |---------|---------|-------------|
-| `FILE_BROWSER_ROOT` | *(auto-detected)* | If set, overrides OpenClaw workspace as the root directory for the workspace directory tree. In this mode, default exclusion rules are disabled and delete operations are permanent (no `.trash` recovery). |
+| `FILE_BROWSER_ROOT` | `""` (disabled) | If set, overrides OpenClaw workspace as the root directory for the workspace directory tree. In this mode, default exclusion rules are disabled and delete operations are permanent (no `.trash` recovery). |
 | `MEMORY_PATH` | `~/.openclaw/workspace/MEMORY.md` | Path to the agent's long-term memory file |
 | `MEMORY_DIR` | `~/.openclaw/workspace/memory/` | Directory for daily memory files (`YYYY-MM-DD.md`) |
 | `SESSIONS_DIR` | `~/.openclaw/agents/main/sessions/` | Session transcript directory (scanned for token usage) |

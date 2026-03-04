@@ -14,6 +14,7 @@ import {
   isExcluded,
   resolveWorkspacePath,
 } from './file-utils.js';
+import { config } from './config.js';
 import { withMutex } from './mutex.js';
 
 const TRASH_DIR = '.trash';
@@ -366,9 +367,14 @@ export async function moveEntry(params: { sourcePath: string; targetDirPath: str
     const targetRel = toWorkspaceRelative(targetAbs);
     assertNotProtectedTarget(targetRel);
 
-    // Prevent bypassing trash metadata by moving directly into .trash via generic move.
+    // Allow moves to .trash in custom workspaces (treated as regular directory)
     if (!isInTrash(sourceRel) && isInTrash(targetRel)) {
-      throw new FileOpError(422, 'use_trash_api', 'Use the trash action for deleting items');
+      const customRoot = config.fileBrowserRoot;
+      if (customRoot && customRoot.trim() !== '') {
+        // Custom workspace: allow .trash moves
+      } else {
+        throw new FileOpError(422, 'use_trash_api', 'Use the trash action for deleting items');
+      }
     }
 
     if (sourceAbs === targetAbs) {

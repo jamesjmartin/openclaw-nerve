@@ -299,7 +299,7 @@ export function FileTreePanel({
       const message = err instanceof Error ? err.message : 'Move failed';
       showToast({ type: 'error', message }, 4500);
     }
-  }, [onCloseOpenPaths, onRemapOpenPaths, postFileOp, refresh, selectFile, showToast]);
+  }, [onCloseOpenPaths, onRemapOpenPaths, postFileOp, refresh, selectFile, showToast, workspaceInfo]);
 
   const canDropToTarget = useCallback((source: TreeEntry, targetDirPath: string): boolean => {
     if (source.path === '.trash') return false;

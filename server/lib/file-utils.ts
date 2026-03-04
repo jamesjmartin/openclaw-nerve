@@ -35,14 +35,17 @@ const BINARY_EXTENSIONS = new Set([
   '.sqlite', '.db',
 ]);
 
+const EMPTY_EXCLUDED_NAMES = new Set<string>();
+const EMPTY_EXCLUDED_PATTERNS: RegExp[] = [];
+
 /** Get exclusion names based on current config state */
 function getExcludedNames(): Set<string> {
-  return config.fileBrowserRoot && config.fileBrowserRoot.trim() !== '' ? new Set([]) : DEFAULT_EXCLUDED_NAMES;
+  return config.fileBrowserRoot && config.fileBrowserRoot.trim() !== '' ? EMPTY_EXCLUDED_NAMES : DEFAULT_EXCLUDED_NAMES;
 }
 
 /** Get exclusion patterns based on current config state */
 function getExcludedPatterns(): RegExp[] {
-  return config.fileBrowserRoot && config.fileBrowserRoot.trim() !== '' ? [] : DEFAULT_EXCLUDED_PATTERNS;
+  return config.fileBrowserRoot && config.fileBrowserRoot.trim() !== '' ? EMPTY_EXCLUDED_PATTERNS : DEFAULT_EXCLUDED_PATTERNS;
 }
 
 /** Check if a file/directory name should be excluded from the tree. */
@@ -88,6 +91,7 @@ export async function resolveWorkspacePath(
   options?: { allowNonExistent?: boolean },
 ): Promise<string | null> {
   const root = getWorkspaceRoot();
+  const rootPrefix = root.endsWith(path.sep) ? root : root + path.sep;
 
   // Block obvious traversal attempts
   const normalized = path.normalize(relativePath);
@@ -104,14 +108,14 @@ export async function resolveWorkspacePath(
   const resolved = path.resolve(root, normalized);
 
   // Must be within workspace root
-  if (!resolved.startsWith(root + path.sep) && resolved !== root) {
+  if (!resolved.startsWith(rootPrefix) && resolved !== root) {
     return null;
   }
 
   // Resolve symlinks and re-check
   try {
     const real = await fs.realpath(resolved);
-    if (!real.startsWith(root + path.sep) && real !== root) {
+    if (!real.startsWith(rootPrefix) && real !== root) {
       return null;
     }
     return real;
@@ -123,7 +127,7 @@ export async function resolveWorkspacePath(
     const parent = path.dirname(resolved);
     try {
       const realParent = await fs.realpath(parent);
-      if (!realParent.startsWith(root + path.sep) && realParent !== root) {
+      if (!realParent.startsWith(rootPrefix) && realParent !== root) {
         return null;
       }
       return resolved;
