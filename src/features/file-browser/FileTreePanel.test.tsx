@@ -93,6 +93,7 @@ describe('FileTreePanel', () => {
           onOpenFile={mockOnOpenFile}
           onRemapOpenPaths={mockOnRemapOpenPaths}
           onCloseOpenPaths={mockOnCloseOpenPaths}
+          collapsed={false}
         />
       );
 
@@ -113,6 +114,7 @@ describe('FileTreePanel', () => {
           onOpenFile={mockOnOpenFile}
           onRemapOpenPaths={mockOnRemapOpenPaths}
           onCloseOpenPaths={mockOnCloseOpenPaths}
+          collapsed={false}
         />
       );
 
@@ -134,6 +136,7 @@ describe('FileTreePanel', () => {
           onOpenFile={mockOnOpenFile}
           onRemapOpenPaths={mockOnRemapOpenPaths}
           onCloseOpenPaths={mockOnCloseOpenPaths}
+          collapsed={false}
         />
       );
 
@@ -148,6 +151,7 @@ describe('FileTreePanel', () => {
           onOpenFile={mockOnOpenFile}
           onRemapOpenPaths={mockOnRemapOpenPaths}
           onCloseOpenPaths={mockOnCloseOpenPaths}
+          collapsed={false}
         />
       );
 
@@ -175,6 +179,7 @@ describe('FileTreePanel', () => {
           onOpenFile={mockOnOpenFile}
           onRemapOpenPaths={mockOnRemapOpenPaths}
           onCloseOpenPaths={mockOnCloseOpenPaths}
+          collapsed={false}
         />
       );
 
@@ -208,6 +213,7 @@ describe('FileTreePanel', () => {
           onOpenFile={mockOnOpenFile}
           onRemapOpenPaths={mockOnRemapOpenPaths}
           onCloseOpenPaths={mockOnCloseOpenPaths}
+          collapsed={false}
         />
       );
 
@@ -239,6 +245,7 @@ describe('FileTreePanel', () => {
           onOpenFile={mockOnOpenFile}
           onRemapOpenPaths={mockOnRemapOpenPaths}
           onCloseOpenPaths={mockOnCloseOpenPaths}
+          collapsed={false}
         />
       );
 
@@ -270,6 +277,7 @@ describe('FileTreePanel', () => {
           onOpenFile={mockOnOpenFile}
           onRemapOpenPaths={mockOnRemapOpenPaths}
           onCloseOpenPaths={mockOnCloseOpenPaths}
+          collapsed={false}
         />
       );
 
@@ -316,6 +324,7 @@ describe('FileTreePanel', () => {
           onOpenFile={mockOnOpenFile}
           onRemapOpenPaths={mockOnRemapOpenPaths}
           onCloseOpenPaths={mockOnCloseOpenPaths}
+          collapsed={false}
         />
       );
 
@@ -358,6 +367,7 @@ describe('FileTreePanel', () => {
           onOpenFile={mockOnOpenFile}
           onRemapOpenPaths={mockOnRemapOpenPaths}
           onCloseOpenPaths={mockOnCloseOpenPaths}
+          collapsed={false}
         />
       );
 
@@ -391,6 +401,7 @@ describe('FileTreePanel', () => {
           onOpenFile={mockOnOpenFile}
           onRemapOpenPaths={mockOnRemapOpenPaths}
           onCloseOpenPaths={mockOnCloseOpenPaths}
+          collapsed={false}
         />
       );
 
@@ -421,6 +432,7 @@ describe('FileTreePanel', () => {
           onOpenFile={mockOnOpenFile}
           onRemapOpenPaths={mockOnRemapOpenPaths}
           onCloseOpenPaths={mockOnCloseOpenPaths}
+          collapsed={false}
         />
       );
 
@@ -456,6 +468,7 @@ describe('FileTreePanel', () => {
           onOpenFile={mockOnOpenFile}
           onRemapOpenPaths={mockOnRemapOpenPaths}
           onCloseOpenPaths={mockOnCloseOpenPaths}
+          collapsed={false}
         />
       );
 
@@ -468,6 +481,7 @@ describe('FileTreePanel', () => {
           onOpenFile={mockOnOpenFile}
           onRemapOpenPaths={mockOnRemapOpenPaths}
           onCloseOpenPaths={mockOnCloseOpenPaths}
+          collapsed={false}
         />
       );
 
@@ -488,11 +502,152 @@ describe('FileTreePanel', () => {
           onOpenFile={mockOnOpenFile}
           onRemapOpenPaths={mockOnRemapOpenPaths}
           onCloseOpenPaths={mockOnCloseOpenPaths}
+          collapsed={false}
         />
       );
 
       expect(screen.getByText('/new/custom/path')).toBeInTheDocument();
       expect(screen.queryByText('Workspace')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Mobile collapse behavior', () => {
+    const mockOnCollapseChange = vi.fn();
+
+    beforeEach(() => {
+      mockOnCollapseChange.mockClear();
+    });
+
+    it('renders normally when not collapsed', () => {
+      mockUseFileTree.mockReturnValue(defaultMockHook);
+
+      render(
+        <FileTreePanel
+          onOpenFile={mockOnOpenFile}
+          onRemapOpenPaths={mockOnRemapOpenPaths}
+          onCloseOpenPaths={mockOnCloseOpenPaths}
+          collapsed={false}
+          onCollapseChange={mockOnCollapseChange}
+          isCompactLayout={false}
+        />
+      );
+
+      expect(screen.getByText('src')).toBeInTheDocument();
+      expect(screen.getByText('package.json')).toBeInTheDocument();
+    });
+
+    it('shows collapsed sidebar on desktop when collapsed', () => {
+      mockUseFileTree.mockReturnValue(defaultMockHook);
+
+      render(
+        <FileTreePanel
+          onOpenFile={mockOnOpenFile}
+          onRemapOpenPaths={mockOnRemapOpenPaths}
+          onCloseOpenPaths={mockOnCloseOpenPaths}
+          collapsed={true}
+          onCollapseChange={mockOnCollapseChange}
+          isCompactLayout={false}
+        />
+      );
+
+      // Should show collapsed panel with expand button
+      expect(screen.getByRole('button', { name: /open file explorer/i })).toBeInTheDocument();
+      expect(screen.queryByText('src')).not.toBeInTheDocument();
+      expect(screen.queryByText('package.json')).not.toBeInTheDocument();
+    });
+
+    it('hides completely on mobile when collapsed', () => {
+      mockUseFileTree.mockReturnValue(defaultMockHook);
+
+      const { container } = render(
+        <FileTreePanel
+          onOpenFile={mockOnOpenFile}
+          onRemapOpenPaths={mockOnRemapOpenPaths}
+          onCloseOpenPaths={mockOnCloseOpenPaths}
+          collapsed={true}
+          onCollapseChange={mockOnCollapseChange}
+          isCompactLayout={true}
+        />
+      );
+
+      // Should render nothing (completely hidden)
+      expect(screen.queryByText('src')).not.toBeInTheDocument();
+      expect(screen.queryByText('package.json')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /open file explorer/i })).not.toBeInTheDocument();
+      expect(container.firstChild).toBeNull();
+    });
+
+    it('renders normally on mobile when expanded', () => {
+      mockUseFileTree.mockReturnValue(defaultMockHook);
+
+      render(
+        <FileTreePanel
+          onOpenFile={mockOnOpenFile}
+          onRemapOpenPaths={mockOnRemapOpenPaths}
+          onCloseOpenPaths={mockOnCloseOpenPaths}
+          collapsed={false}
+          onCollapseChange={mockOnCollapseChange}
+          isCompactLayout={true}
+        />
+      );
+
+      // Should show file entries even on mobile when expanded
+      expect(screen.getByText('src')).toBeInTheDocument();
+      expect(screen.getByText('package.json')).toBeInTheDocument();
+    });
+
+    it('calls onCollapseChange when expand button is clicked', () => {
+      mockUseFileTree.mockReturnValue(defaultMockHook);
+
+      render(
+        <FileTreePanel
+          onOpenFile={mockOnOpenFile}
+          onRemapOpenPaths={mockOnRemapOpenPaths}
+          onCloseOpenPaths={mockOnCloseOpenPaths}
+          collapsed={true}
+          onCollapseChange={mockOnCollapseChange}
+          isCompactLayout={false}
+        />
+      );
+
+      const expandButton = screen.getByRole('button', { name: /open file explorer/i });
+      fireEvent.click(expandButton);
+
+      expect(mockOnCollapseChange).toHaveBeenCalledWith(false);
+    });
+
+    it('switches to collapsed desktop UI when collapsed prop changes', () => {
+      mockUseFileTree.mockReturnValue(defaultMockHook);
+
+      const { rerender } = render(
+        <FileTreePanel
+          onOpenFile={mockOnOpenFile}
+          onRemapOpenPaths={mockOnRemapOpenPaths}
+          onCloseOpenPaths={mockOnCloseOpenPaths}
+          collapsed={false}
+          onCollapseChange={mockOnCollapseChange}
+          isCompactLayout={false}
+        />
+      );
+
+      // Initially should show normal width
+      expect(screen.getByText('src')).toBeInTheDocument();
+
+      // Collapse should switch to desktop collapsed sidebar state
+      rerender(
+        <FileTreePanel
+          onOpenFile={mockOnOpenFile}
+          onRemapOpenPaths={mockOnRemapOpenPaths}
+          onCloseOpenPaths={mockOnCloseOpenPaths}
+          collapsed={true}
+          onCollapseChange={mockOnCollapseChange}
+          isCompactLayout={false}
+        />
+      );
+
+      // Should show collapsed state
+      expect(screen.getByRole('button', { name: /open file explorer/i })).toBeInTheDocument();
+      expect(screen.queryByText('src')).not.toBeInTheDocument();
     });
   });
 });

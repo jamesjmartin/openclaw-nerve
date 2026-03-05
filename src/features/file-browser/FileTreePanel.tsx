@@ -15,13 +15,14 @@ import type { TreeEntry } from './types';
 const MIN_WIDTH = 160;
 const MAX_WIDTH = 400;
 const DEFAULT_WIDTH = 220;
+/** Sentinel value for width state when collapsed; actual desktop collapsed UI uses w-9 (36px) */
 const COLLAPSED_WIDTH = 0;
 
 const WIDTH_STORAGE_KEY = 'nerve-file-tree-width';
-const COLLAPSED_STORAGE_KEY = 'nerve-file-tree-collapsed';
 const MENU_VIEWPORT_PADDING = 8;
 const UNDO_TOAST_TTL_MS = 10_000;
 
+/** Load persisted file tree width from localStorage. */
 function loadWidth(): number {
   try {
     const v = localStorage.getItem(WIDTH_STORAGE_KEY);
@@ -29,22 +30,19 @@ function loadWidth(): number {
   } catch { return DEFAULT_WIDTH; }
 }
 
-function loadCollapsed(): boolean {
-  try {
-    return localStorage.getItem(COLLAPSED_STORAGE_KEY) === 'true';
-  } catch { return false; }
-}
-
+/** Get parent directory path from a file path. */
 function getParentDir(filePath: string): string {
   const idx = filePath.lastIndexOf('/');
   return idx === -1 ? '' : filePath.slice(0, idx);
 }
 
+/** Get basename (filename) from a file path. */
 function basename(filePath: string): string {
   const idx = filePath.lastIndexOf('/');
   return idx === -1 ? filePath : filePath.slice(idx + 1);
 }
 
+/** Check if a path points to a trash item. */
 function isTrashItemPath(filePath: string): boolean {
   return filePath.startsWith('.trash/') && filePath !== '.trash';
 }
@@ -55,6 +53,12 @@ interface FileTreePanelProps {
   onCloseOpenPaths?: (pathPrefix: string) => void;
   /** Called externally when a file changes (SSE) — refreshes affected directory */
   lastChangedPath?: string | null;
+  /** Mobile layout flag - when true, collapsed panel is completely hidden */
+  isCompactLayout?: boolean;
+  /** Callback to notify parent of collapse state changes */
+  onCollapseChange?: (collapsed: boolean) => void;
+  /** External control of collapsed state */
+  collapsed: boolean;
 }
 
 interface FileOpResult {
@@ -74,6 +78,9 @@ export function FileTreePanel({
   onRemapOpenPaths,
   onCloseOpenPaths,
   lastChangedPath,
+  isCompactLayout = false,
+  onCollapseChange,
+  collapsed,
 }: FileTreePanelProps) {
   const {
     entries, loading, error, expandedPaths, selectedPath,
@@ -91,15 +98,16 @@ export function FileTreePanel({
 
   const panelRef = useRef<HTMLDivElement>(null);
   const widthRef = useRef(loadWidth());
-  const collapsedRef = useRef(loadCollapsed());
   const draggingRef = useRef(false);
-
-  // State-driven rendering (refs hold source of truth, state triggers re-render)
-  const [collapsed, setCollapsed] = useState(loadCollapsed);
   const [width, setWidth] = useState(() => {
-    const c = loadCollapsed();
-    return c ? COLLAPSED_WIDTH : loadWidth();
+    return collapsed ? COLLAPSED_WIDTH : loadWidth();
   });
+
+  // Handle external collapsed state changes (e.g., from mobile button)
+  useEffect(() => {
+    const targetWidth = collapsed ? COLLAPSED_WIDTH : widthRef.current;
+    setWidth(targetWidth);
+  }, [collapsed]);
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; entry: TreeEntry } | null>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
@@ -186,11 +194,9 @@ export function FileTreePanel({
   }, [contextMenu]);
 
   const toggleCollapsed = useCallback(() => {
-    collapsedRef.current = !collapsedRef.current;
-    setCollapsed(collapsedRef.current);
-    setWidth(collapsedRef.current ? COLLAPSED_WIDTH : widthRef.current);
-    try { localStorage.setItem(COLLAPSED_STORAGE_KEY, String(collapsedRef.current)); } catch { /* ignore */ }
-  }, []);
+    const newCollapsed = !collapsed;
+    onCollapseChange?.(newCollapsed);
+  }, [collapsed, onCollapseChange]);
 
   // Resize drag handling
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -505,7 +511,13 @@ export function FileTreePanel({
     void runMove(source.path, '');
   }, [canDropToTarget, dragSource, runMove]);
 
+  // Mobile collapsed state - completely hide panel, on desktop show narrow collapsed panel
   if (collapsed) {
+    if (isCompactLayout) {
+      // On mobile, return null to completely hide the panel
+      return null;
+    }
+    // On desktop, show the collapsed panel with expand button
     return (
       <div className="shrink-0 border-r border-border bg-background flex flex-col items-center pt-2 w-9">
         <button

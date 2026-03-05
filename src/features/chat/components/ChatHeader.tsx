@@ -1,4 +1,4 @@
-import { Cpu, Gauge } from 'lucide-react';
+import { Cpu, Gauge, PanelLeftOpen } from 'lucide-react';
 import { InlineSelect } from '@/components/ui/InlineSelect';
 import { useModelEffort } from './useModelEffort';
 
@@ -6,6 +6,8 @@ interface ChatHeaderProps {
   onReset?: () => void;
   onAbort: () => void;
   isGenerating: boolean;
+  /** Mobile file browser expand button - show when file browser is collapsed on mobile */
+  onToggleFileBrowser?: () => void;
 }
 
 /**
@@ -18,6 +20,7 @@ export function ChatHeader({
   onReset,
   onAbort,
   isGenerating,
+  onToggleFileBrowser,
 }: ChatHeaderProps) {
   const {
     modelOptions,
@@ -32,6 +35,18 @@ export function ChatHeader({
 
   return (
     <div className="flex items-center gap-1.5 sm:gap-2.5 px-2 sm:px-3 py-2 bg-secondary border-b border-border/60 shrink-0 border-l-[3px] border-l-primary">
+      {/* Mobile file browser expand button */}
+      {/* Layered: CSS (lg:hidden) + JS (isCompactLayout@900px). JS prop gating is primary control. */}
+      {onToggleFileBrowser && (
+        <button
+          onClick={onToggleFileBrowser}
+          className="p-1 rounded hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors lg:hidden"
+          title="Open file explorer (Ctrl+B)"
+          aria-label="Open file explorer"
+        >
+          <PanelLeftOpen size={16} />
+        </button>
+      )}
       <span className="text-[11px] font-bold tracking-[2px] text-primary uppercase flex items-center gap-1.5">
         <span className="text-[8px]">◆</span>
         COMMS
