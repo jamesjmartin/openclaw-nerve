@@ -56,7 +56,7 @@ interface FileTreePanelProps {
   /** Mobile layout flag - when true, collapsed panel is completely hidden */
   isCompactLayout?: boolean;
   /** Callback to notify parent of collapse state changes */
-  onCollapseChange?: (collapsed: boolean) => void;
+  onCollapseChange: (collapsed: boolean) => void;
   /** External control of collapsed state */
   collapsed: boolean;
 }
@@ -194,8 +194,7 @@ export function FileTreePanel({
   }, [contextMenu]);
 
   const toggleCollapsed = useCallback(() => {
-    const newCollapsed = !collapsed;
-    onCollapseChange?.(newCollapsed);
+    onCollapseChange(!collapsed);
   }, [collapsed, onCollapseChange]);
 
   // Resize drag handling

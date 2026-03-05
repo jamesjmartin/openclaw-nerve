@@ -69,7 +69,7 @@ describe('FileTreePanel', () => {
     vi.stubGlobal('fetch', vi.fn());
     // Use the statically imported mocked hook
     mockUseFileTree = vi.mocked(useFileTree);
-    
+
     // Mock localStorage
     const localStorageMock = {
       getItem: vi.fn(),
@@ -284,7 +284,7 @@ describe('FileTreePanel', () => {
       // Open context menu and click "Permanently Delete"
       const contextMenuEvent = new MouseEvent('contextmenu', { bubbles: true });
       fireEvent.contextMenu(screen.getByText('src'), contextMenuEvent);
-      
+
       const deleteButton = await screen.findByText('Permanently Delete');
       fireEvent.click(deleteButton);
 
@@ -331,7 +331,7 @@ describe('FileTreePanel', () => {
       // Open context menu and click "Permanently Delete"
       const contextMenuEvent = new MouseEvent('contextmenu', { bubbles: true });
       fireEvent.contextMenu(screen.getByText('src'), contextMenuEvent);
-      
+
       const deleteButton = await screen.findByText('Permanently Delete');
       fireEvent.click(deleteButton);
 
@@ -374,7 +374,7 @@ describe('FileTreePanel', () => {
       // Trigger permanent deletion
       const contextMenuEvent = new MouseEvent('contextmenu', { bubbles: true });
       fireEvent.contextMenu(screen.getByText('src'), contextMenuEvent);
-      
+
       const deleteButton = await screen.findByText('Permanently Delete');
       fireEvent.click(deleteButton);
 
@@ -408,7 +408,7 @@ describe('FileTreePanel', () => {
       // Trigger permanent deletion
       const contextMenuEvent = new MouseEvent('contextmenu', { bubbles: true });
       fireEvent.contextMenu(screen.getByText('src'), contextMenuEvent);
-      
+
       const deleteButton = await screen.findByText('Permanently Delete');
       fireEvent.click(deleteButton);
 
@@ -438,14 +438,14 @@ describe('FileTreePanel', () => {
 
       // Verify custom workspace header is shown
       expect(screen.getByText('/custom/workspace')).toBeInTheDocument();
-      
+
       // Verify context menu shows permanent delete options
       const contextMenuEvent = new MouseEvent('contextmenu', { bubbles: true });
       fireEvent.contextMenu(screen.getByText('src'), contextMenuEvent);
-      
+
       expect(screen.getByText('Permanently Delete')).toBeInTheDocument();
       expect(screen.queryByText('Move to Trash')).not.toBeInTheDocument();
-      
+
       // Close the context menu
       fireEvent.click(document.body);
     });
@@ -457,7 +457,7 @@ describe('FileTreePanel', () => {
         isCustomWorkspace: true,
         rootPath: '/home/user/project',
       };
-      
+
       mockUseFileTree.mockReturnValue({
         ...defaultMockHook,
         workspaceInfo: customWorkspaceInfo,
