@@ -473,7 +473,7 @@ describe('useFileTree', () => {
       });
     });
 
-    it('does not evict path on other error statuses (500, network errors)', async () => {
+    it('does not evict path on server error statuses (500)', async () => {
       const mockFetch = vi.mocked(fetch);
       
       // Initial load succeeds
