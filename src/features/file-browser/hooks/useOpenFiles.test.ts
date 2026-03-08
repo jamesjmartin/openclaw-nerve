@@ -110,5 +110,61 @@ describe('useOpenFiles', () => {
     });
 
     expect(mockLocalStorage.setItem).toHaveBeenCalledWith('nerve-active-tab', 'missing.txt');
+    expect(mockLocalStorage.setItem).toHaveBeenCalledWith('nerve-open-files', JSON.stringify([]));
+  });
+
+  it('resets activeTab to chat when the persisted tab is filtered out during initialization', async () => {
+    const mockLocalStorage = vi.mocked(localStorage);
+    mockLocalStorage.getItem.mockImplementation((key: string) => {
+      if (key === 'nerve-open-files') return '["missing.txt"]'; // Need at least one path to trigger the logic
+      if (key === 'nerve-active-tab') return 'missing.txt';
+      return null;
+    });
+
+    const mockFetch = vi.mocked(fetch);
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 404,
+    } as Response);
+
+    const { result } = renderHook(() => useOpenFiles());
+
+    await act(async () => {
+      await result.current.initializeFiles();
+    });
+
+    await waitFor(() => {
+      expect(result.current.openFiles).toEqual([]);
+    });
+
+    expect(mockLocalStorage.setItem).toHaveBeenCalledWith('nerve-active-tab', 'chat');
+  });
+
+  it('resets activeTab to first valid file when persisted tab is filtered out', async () => {
+    const mockLocalStorage = vi.mocked(localStorage);
+    mockLocalStorage.getItem.mockImplementation((key: string) => {
+      if (key === 'nerve-open-files') return '["valid.txt"]';
+      if (key === 'nerve-active-tab') return 'missing.txt';
+      return null;
+    });
+
+    const mockFetch = vi.mocked(fetch);
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ ok: true, content: 'hello', mtime: 123 }),
+    } as Response);
+
+    const { result } = renderHook(() => useOpenFiles());
+
+    await act(async () => {
+      await result.current.initializeFiles();
+    });
+
+    await waitFor(() => {
+      expect(result.current.openFiles).toHaveLength(1);
+      expect(result.current.openFiles[0]?.path).toBe('valid.txt');
+    });
+
+    expect(mockLocalStorage.setItem).toHaveBeenCalledWith('nerve-active-tab', 'valid.txt');
   });
 });

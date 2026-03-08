@@ -61,6 +61,7 @@ export function useOpenFiles() {
     initializedRef.current = true;
 
     const paths = loadPersistedFiles();
+    const persistedTab = loadPersistedTab();
     if (paths.length === 0) return;
 
     const files: OpenFile[] = [];
@@ -94,9 +95,14 @@ export function useOpenFiles() {
     }
 
     // Always persist filtered results to clear stale cache entries
-    if (paths.length > 0) {
-      setOpenFiles(files);
-      persistFiles(files);
+    setOpenFiles(files);
+    persistFiles(files);
+
+    // Reset activeTab if the persisted tab was filtered out
+    if (persistedTab !== 'chat' && !files.some((f) => f.path === persistedTab)) {
+      const nextTab = files[0]?.path ?? 'chat';
+      setActiveTabState(nextTab);
+      persistTab(nextTab);
     }
   }, []);
 
@@ -163,7 +169,17 @@ export function useOpenFiles() {
       
       // If not successful, close the file tab and remove from cache
       if (!res.ok) {
-        setOpenFiles((prev) => prev.filter(f => f.path !== filePath));
+        setOpenFiles((prev) => {
+          const next = prev.filter(f => f.path !== filePath);
+          persistFiles(next);
+          return next;
+        });
+        setActiveTabState((currentTab) => {
+          if (currentTab !== filePath) return currentTab;
+          const nextTab = 'chat';
+          persistTab(nextTab);
+          return nextTab;
+        });
         return;
       }
       
@@ -281,7 +297,17 @@ export function useOpenFiles() {
       
       // If not successful, remove the file tab
       if (!res.ok) {
-        setOpenFiles((prev) => prev.filter(f => f.path !== filePath));
+        setOpenFiles((prev) => {
+          const next = prev.filter(f => f.path !== filePath);
+          persistFiles(next);
+          return next;
+        });
+        setActiveTabState((currentTab) => {
+          if (currentTab !== filePath) return currentTab;
+          const nextTab = 'chat';
+          persistTab(nextTab);
+          return nextTab;
+        });
         return;
       }
 
