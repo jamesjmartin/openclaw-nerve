@@ -62,6 +62,17 @@ export function useFileTree() {
     try {
       const params = dirPath ? `?path=${encodeURIComponent(dirPath)}&depth=1` : '?depth=1';
       const res = await fetch(`/api/files/tree${params}`);
+      
+      // If not successful, remove from expanded paths cache
+      if (!res.ok) {
+        setExpandedPaths(prev => {
+          const next = new Set(prev);
+          next.delete(dirPath);
+          return next;
+        });
+        return null;
+      }
+      
       if (!res.ok) return null;
       const data = await res.json();
       if (data.ok && data.workspaceInfo) {

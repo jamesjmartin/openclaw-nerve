@@ -67,9 +67,17 @@ export function useOpenFiles() {
     for (const p of paths) {
       try {
         const res = await fetch(`/api/files/read?path=${encodeURIComponent(p)}`);
-        if (!res.ok) continue;
+        
+        // If not successful, skip it
+        if (!res.ok) {
+          continue;
+        }
+        
         const data = await res.json();
-        if (!data.ok) continue;
+        if (!data.ok) {
+          continue;
+        }
+        
         files.push({
           path: p,
           name: basename(p),
@@ -85,8 +93,10 @@ export function useOpenFiles() {
       }
     }
 
-    if (files.length > 0) {
+    // Always persist filtered results to clear stale cache entries
+    if (paths.length > 0) {
       setOpenFiles(files);
+      persistFiles(files);
     }
   }, []);
 
@@ -150,6 +160,13 @@ export function useOpenFiles() {
     // Fetch content for text files
     try {
       const res = await fetch(`/api/files/read?path=${encodeURIComponent(filePath)}`);
+      
+      // If not successful, close the file tab and remove from cache
+      if (!res.ok) {
+        setOpenFiles((prev) => prev.filter(f => f.path !== filePath));
+        return;
+      }
+      
       const data = await res.json();
 
       setOpenFiles((prev) =>
@@ -261,21 +278,14 @@ export function useOpenFiles() {
   const reloadFile = useCallback(async (filePath: string) => {
     try {
       const res = await fetch(`/api/files/read?path=${encodeURIComponent(filePath)}`);
-      const data = await res.json();
-
-      if (!data.ok) {
-        // File was deleted or became inaccessible
-        if (res.status === 404) {
-          setOpenFiles((prev) =>
-            prev.map((f) =>
-              f.path === filePath
-                ? { ...f, error: 'File was deleted', locked: false, loading: false }
-                : f,
-            ),
-          );
-        }
+      
+      // If not successful, remove the file tab
+      if (!res.ok) {
+        setOpenFiles((prev) => prev.filter(f => f.path !== filePath));
         return;
       }
+
+      const data = await res.json();
 
       setOpenFiles((prev) =>
         prev.map((f) =>

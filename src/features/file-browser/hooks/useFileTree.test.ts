@@ -292,6 +292,41 @@ describe('useFileTree', () => {
 
       expect(mockLocalStorage.getItem).toHaveBeenCalledWith('nerve-file-tree-expanded');
     });
+
+    it('removes stale expanded paths when a persisted directory reload fails', async () => {
+      const mockLocalStorage = vi.mocked(localStorage);
+      mockLocalStorage.getItem.mockReturnValue('["stale-dir"]');
+
+      const mockFetch = vi.mocked(fetch);
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            ok: true,
+            entries: [],
+            workspaceInfo: { isCustomWorkspace: false, rootPath: '/workspace' },
+          }),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 404,
+        } as Response);
+
+      const { result } = renderHook(() => useFileTree());
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      await waitFor(() => {
+        expect(result.current.expandedPaths.has('stale-dir')).toBe(false);
+      });
+
+      expect(mockLocalStorage.setItem).toHaveBeenLastCalledWith(
+        'nerve-file-tree-expanded',
+        JSON.stringify([]),
+      );
+    });
   });
 
   describe('return object includes workspaceInfo', () => {
