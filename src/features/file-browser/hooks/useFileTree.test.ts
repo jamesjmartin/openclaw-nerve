@@ -533,6 +533,8 @@ describe('useFileTree', () => {
         expect(result.current.loading).toBe(false);
       });
 
+      const writesBeforeToggle = mockLocalStorage.setItem.mock.calls.length;
+
       // Toggle directory that returns 404
       mockFetch.mockResolvedValueOnce({
         ok: false,
@@ -548,9 +550,10 @@ describe('useFileTree', () => {
 
       // Verify localStorage.setItem was called to persist the change
       await waitFor(() => {
-        expect(mockLocalStorage.setItem).toHaveBeenCalledWith(
+        expect(mockLocalStorage.setItem.mock.calls.length).toBeGreaterThan(writesBeforeToggle);
+        expect(mockLocalStorage.setItem).toHaveBeenLastCalledWith(
           'nerve-file-tree-expanded',
-          expect.not.stringContaining('src')
+          expect.not.stringContaining('src'),
         );
       });
     });
