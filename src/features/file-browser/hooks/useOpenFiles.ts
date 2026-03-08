@@ -62,7 +62,13 @@ export function useOpenFiles() {
 
     const paths = loadPersistedFiles();
     const persistedTab = loadPersistedTab();
-    if (paths.length === 0) return;
+    if (paths.length === 0) {
+      if (persistedTab !== 'chat') {
+        setActiveTabState('chat');
+        persistTab('chat');
+      }
+      return;
+    }
 
     const files: OpenFile[] = [];
     for (const p of paths) {

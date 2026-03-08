@@ -113,6 +113,27 @@ describe('useOpenFiles', () => {
     expect(mockLocalStorage.setItem).toHaveBeenCalledWith('nerve-open-files', JSON.stringify([]));
   });
 
+  it('resets activeTab to chat when there are no persisted files but activeTab is stale', async () => {
+    const mockLocalStorage = vi.mocked(localStorage);
+    mockLocalStorage.getItem.mockImplementation((key: string) => {
+      if (key === 'nerve-open-files') return '[]'; // No files
+      if (key === 'nerve-active-tab') return 'missing.txt'; // Stale tab
+      return null;
+    });
+
+    const { result } = renderHook(() => useOpenFiles());
+
+    await act(async () => {
+      await result.current.initializeFiles();
+    });
+
+    await waitFor(() => {
+      expect(result.current.openFiles).toEqual([]);
+    });
+
+    expect(mockLocalStorage.setItem).toHaveBeenCalledWith('nerve-active-tab', 'chat');
+  });
+
   it('resets activeTab to chat when the persisted tab is filtered out during initialization', async () => {
     const mockLocalStorage = vi.mocked(localStorage);
     mockLocalStorage.getItem.mockImplementation((key: string) => {
