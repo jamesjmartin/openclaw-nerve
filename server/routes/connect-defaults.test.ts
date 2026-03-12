@@ -11,6 +11,7 @@ describe('GET /api/connect-defaults', () => {
     vi.restoreAllMocks();
   });
 
+  /** Build a Hono app with mocked config for testing. */
   async function buildApp(configOverrides: Record<string, unknown> = {}) {
     vi.doMock('../lib/config.js', () => ({
       config: {

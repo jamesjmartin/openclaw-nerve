@@ -1,6 +1,6 @@
 /**
  * useConnectionManager - Handles gateway connection lifecycle
- * 
+ *
  * Extracted from App.tsx to separate connection concerns from layout.
  * Manages auto-connect on mount and reconnect logic.
  *
@@ -46,19 +46,20 @@ async function fetchConnectDefaults(): Promise<{ wsUrl: string; token: string | 
 
 export function useConnectionManager(): ConnectionManagerState {
   const { connectionState, connect, disconnect } = useGateway();
-  
+
   const [dialogOpen, setDialogOpen] = useState(true);
-  
+
   // Editable connection settings (local state for settings drawer)
   // Lazy initializers avoid re-parsing sessionStorage on every render
   const [editableUrl, setEditableUrl] = useState(() => loadConfig().url || DEFAULT_GATEWAY_WS);
   const [editableToken, setEditableToken] = useState(() => loadConfig().token || '');
-  
+
   const [authEnabled, setAuthEnabled] = useState(false);
-  
+
   // Track if we've attempted auto-connect to avoid re-running
   const autoConnectAttempted = useRef(false);
 
+  /** Connect to the gateway, save config, and close the dialog. */
   const handleConnect = useCallback(async (url: string, token: string) => {
     saveConfig(url, token);
     await connect(url, token);
@@ -95,7 +96,7 @@ export function useConnectionManager(): ConnectionManagerState {
     if (connectionState === 'connecting' || connectionState === 'reconnecting') {
       return;
     }
-    
+
     if (editableUrl && (editableToken || authEnabled)) {
       // Save the new config first
       saveConfig(editableUrl, editableToken);
