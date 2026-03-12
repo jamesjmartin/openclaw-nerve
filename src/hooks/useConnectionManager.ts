@@ -83,7 +83,9 @@ export function useConnectionManager(): ConnectionManagerState {
 
       // Auto-connect without token when auth is enabled and URL is known!
       if (serverAuthEnabled && defaults?.wsUrl && !saved.url) {
-        handleConnect(defaults.wsUrl, '');
+        handleConnect(defaults.wsUrl, '').catch(() => {
+          // Auto-connect failed - user can manually connect via dialog
+        });
       }
     });
   }, [handleConnect]);

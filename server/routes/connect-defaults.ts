@@ -6,8 +6,8 @@
  * this endpoint exposes the server's configured gateway URL and token
  * so the frontend can pre-fill (or auto-connect).
  *
- * Security: The gateway token is only returned to loopback clients.
- * Remote clients receive the wsUrl and agentName but token is null.
+ * Security: The token field is always null; token injection is handled server-side
+ * by the WebSocket proxy for trusted clients (authenticated sessions or loopback).
  */
 
 import { Hono } from 'hono';
